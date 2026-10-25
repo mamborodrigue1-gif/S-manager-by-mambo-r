@@ -19,7 +19,8 @@
 :root[data-theme="dark"]{--bg:#15171c;--card:#1e2128;--ink:#eef0f3;--sub:#a3aab6;--line:#30343c;}
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;}
-body{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background-position:center;background-size:cover;background-attachment:fixed;background-repeat:no-repeat;}
+body{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background-position:center;background-size:cover;background-attachment:fixed;background-repeat:no-repeat;min-height:100vh;}
+html.has-wallpaper{background-position:center;background-size:cover;background-attachment:fixed;background-repeat:no-repeat;}
 body.has-wallpaper header,body.has-wallpaper nav,body.has-wallpaper #anneeBar,body.has-wallpaper .card{background-color:color-mix(in srgb,var(--card) 91%,transparent);backdrop-filter:blur(3px);}
 .brand-signature{font-size:10px;font-weight:800;letter-spacing:.6px;color:#2f6fed;text-align:left;margin-top:7px;border-top:1px solid #d5d9e0;padding-top:5px;}
 .wallpaper-controls input[type=file]{max-width:100%;}
@@ -2259,23 +2260,41 @@ function sheetToAoa(data){
 // ---------- EXPORT (PDF / Excel / JPEG) ----------
 function safeName(s){ return String(s).replace(/[\\\/:*?"<>|]+/g,'').replace(/\s+/g,'_'); }
 function wallpaperData(){ try{return localStorage.getItem('smanager_wallpaper_v1')||'';}catch(e){return '';} }
-function wallpaperForDocuments(){ try{return localStorage.getItem('smanager_wallpaper_exports_v1')==='1';}catch(e){return false;} }
+function wallpaperForDocuments(){ try{return localStorage.getItem('smanager_wallpaper_exports_v1')!=='0';}catch(e){return true;} }
 function applySheetWallpaper(el){
   if(!el) return;
   const img=wallpaperData();
   if(img && wallpaperForDocuments()){
-    el.style.backgroundImage='linear-gradient(rgba(255,255,255,.88),rgba(255,255,255,.88)),url("'+img+'")';
-    el.style.backgroundSize='cover'; el.style.backgroundPosition='center';
+    let veil=.48;
+    try{veil=Math.max(.15,Math.min(.85,Number(localStorage.getItem('smanager_wallpaper_opacity_v1')||.48)));}catch(e){}
+    el.style.backgroundImage='linear-gradient(rgba(255,255,255,'+veil+'),rgba(255,255,255,'+veil+')),url("'+img+'")';
+    el.style.backgroundSize='cover'; el.style.backgroundPosition='center'; el.style.backgroundRepeat='no-repeat';
   } else { el.style.backgroundImage='none'; }
 }
 function applyAppWallpaper(){
   const img=wallpaperData();
-  let opacity=.82; try{opacity=Math.max(.35,Math.min(.96,Number(localStorage.getItem('smanager_wallpaper_opacity_v1')||.82)));}catch(e){}
+  let opacity=.48;
+  try{
+    const saved=localStorage.getItem('smanager_wallpaper_opacity_v1');
+    opacity=saved===null?.48:Number(saved);
+    // Older versions defaulted to an 82% white veil, making the photo almost invisible.
+    if(!Number.isFinite(opacity) || opacity>.70 || opacity<.15) { opacity=.48; localStorage.setItem('smanager_wallpaper_opacity_v1','0.48'); }
+    opacity=Math.max(.15,Math.min(.85,opacity));
+  }catch(e){}
+  const root=document.documentElement;
   if(img){
+    root.classList.add('has-wallpaper');
     document.body.classList.add('has-wallpaper');
-    const wash=(document.documentElement.dataset.theme==='dark' || (!document.documentElement.dataset.theme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches))?'rgba(21,23,28,':'rgba(244,245,247,';
-    document.body.style.backgroundImage='linear-gradient('+wash+opacity+'),url("'+img+'")';
+    const dark=(root.dataset.theme==='dark' || (!root.dataset.theme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches));
+    const wash=dark?'rgba(21,23,28,':'rgba(244,245,247,';
+    const bg='linear-gradient('+wash+opacity+'),url("'+img+'")';
+    root.style.backgroundImage=bg;
+    root.style.backgroundPosition='center'; root.style.backgroundSize='cover'; root.style.backgroundRepeat='no-repeat';
+    document.body.style.backgroundImage=bg;
+    document.body.style.backgroundPosition='center'; document.body.style.backgroundSize='cover'; document.body.style.backgroundRepeat='no-repeat';
+    document.body.style.backgroundAttachment='fixed';
   }else{
+    root.classList.remove('has-wallpaper'); root.style.backgroundImage='';
     document.body.classList.remove('has-wallpaper'); document.body.style.backgroundImage='';
   }
 }
@@ -2283,12 +2302,17 @@ function configureWallpaperCard(app){
   const c=document.createElement('div'); c.className='card wallpaper-controls';
   c.innerHTML='<h2>🖼️ Fond d’écran personnalisé</h2><p class="small">Choisis une photo depuis ton téléphone ou ton ordinateur. Elle sera mémorisée sur cet appareil. Tu peux aussi décider de l’inclure en arrière-plan des impressions et des exports PDF/JPEG. Pour Excel, la signature et la date restent intégrées au tableau.</p>'+
     '<div class="row"><input id="wallpaperFile" type="file" accept="image/*" aria-label="Choisir une photo de fond"></div>'+
-    '<div class="row"><label for="wallpaperOpacity" class="small">Visibilité de la photo dans l’application</label><input id="wallpaperOpacity" type="range" min="0.35" max="0.96" step="0.03" value="0.82" style="flex:1;min-width:130px"><span id="wallpaperOpacityLabel" class="small">82 % de voile</span></div>'+
+    '<div class="row"><label for="wallpaperOpacity" class="small">Visibilité de la photo dans l’application</label><input id="wallpaperOpacity" type="range" min="0.15" max="0.85" step="0.05" value="0.48" style="flex:1;min-width:130px"><span id="wallpaperOpacityLabel" class="small">48 % de voile</span></div>'+
     '<div class="row"><label class="small"><input id="wallpaperExports" type="checkbox"> Inclure la photo dans les impressions et les exports PDF/JPEG</label></div>'+
     '<div class="row"><button type="button" id="wallpaperReset" class="btn ghost small">Retirer la photo</button><span id="wallpaperStatus" class="small" role="status"></span></div>';
   app.appendChild(c);
   const file=c.querySelector('#wallpaperFile'), slider=c.querySelector('#wallpaperOpacity'), label=c.querySelector('#wallpaperOpacityLabel'), check=c.querySelector('#wallpaperExports'), status=c.querySelector('#wallpaperStatus');
-  try{slider.value=localStorage.getItem('smanager_wallpaper_opacity_v1')||'0.82';check.checked=localStorage.getItem('smanager_wallpaper_exports_v1')==='1';}catch(e){}
+  try{
+    let savedOpacity=localStorage.getItem('smanager_wallpaper_opacity_v1');
+    if(savedOpacity===null || Number(savedOpacity)>.70 || Number(savedOpacity)<.15){savedOpacity='0.48';localStorage.setItem('smanager_wallpaper_opacity_v1',savedOpacity);}
+    slider.value=savedOpacity;
+    check.checked=localStorage.getItem('smanager_wallpaper_exports_v1')!=='0';
+  }catch(e){check.checked=true;slider.value='0.48';}
   label.textContent=Math.round(Number(slider.value)*100)+' % de voile';
   file.onchange=()=>{
     const f=file.files&&file.files[0]; if(!f)return;
@@ -2310,7 +2334,7 @@ function configureWallpaperCard(app){
   };
   slider.oninput=()=>{label.textContent=Math.round(Number(slider.value)*100)+' % de voile';try{localStorage.setItem('smanager_wallpaper_opacity_v1',slider.value);}catch(e){}applyAppWallpaper();};
   check.onchange=()=>{try{localStorage.setItem('smanager_wallpaper_exports_v1',check.checked?'1':'0');status.textContent=check.checked?'Photo activée pour PDF/JPEG/impression.':'Photo uniquement dans l’application.';}catch(e){}};
-  c.querySelector('#wallpaperReset').onclick=()=>{try{localStorage.removeItem('smanager_wallpaper_v1');localStorage.removeItem('smanager_wallpaper_exports_v1');check.checked=false;}catch(e){}file.value='';applyAppWallpaper();status.textContent='Photo de fond retirée.';};
+  c.querySelector('#wallpaperReset').onclick=()=>{try{localStorage.removeItem('smanager_wallpaper_v1');localStorage.setItem('smanager_wallpaper_exports_v1','0');check.checked=false;}catch(e){}file.value='';applyAppWallpaper();status.textContent='Photo de fond retirée.';};
 }
 
 function exportExcel(data, filename){
@@ -3295,6 +3319,9 @@ try{applyAppWallpaper();}catch(e){console.warn('Fond d’écran indisponible',e)
 window.addEventListener('pageshow',()=>{try{applyAppWallpaper();}catch(e){}});
 window.addEventListener('focus',()=>{try{applyAppWallpaper();}catch(e){}});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){try{applyAppWallpaper();}catch(e){}}});
+// Reapplique le fond après les reconstructions de l’interface sans effacer la photo stockée.
+const wallpaperObserver=new MutationObserver(()=>{if(wallpaperData() && !document.body.classList.contains('printing')){try{applyAppWallpaper();}catch(e){}}});
+wallpaperObserver.observe(document.body,{childList:true,subtree:true});
 </script>
 </body>
 </html>
