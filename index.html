@@ -34,7 +34,15 @@ main{max-width:1100px;margin:0 auto;padding:18px 20px 60px;}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px;}
 .card h2{margin:0 0 10px;font-size:15px;}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;}
-input[type=text],input[type=number],input[type=date],select{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:8px 9px;font-size:16px;min-height:38px;}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:10px 0;}
+.field{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--sub);min-width:0;}
+.field input,.field select{width:100%;min-width:0;}
+.table-wrap{overflow:auto;max-width:100%;margin-top:12px;}
+.data-table{min-width:760px;border-collapse:collapse;}
+.data-table th,.data-table td{border:1px solid var(--line);padding:7px;text-align:left;vertical-align:top;}
+.data-table th{background:var(--bg);position:sticky;top:0;}
+@media(max-width:650px){.grid2{grid-template-columns:1fr;}.data-table{min-width:680px;}}
+input[type=text],input[type=number],input[type=date],input[type=month],select{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:8px 9px;font-size:16px;min-height:38px;}
 button.btn{background:var(--accent);color:#fff;border:none;border-radius:7px;padding:9px 14px;font-size:14px;cursor:pointer;min-height:38px;}
 .gridwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -16px;padding:0 16px;}
 table.grid{width:auto;border-collapse:collapse;}
@@ -171,6 +179,7 @@ const firebaseConfig = {
 };
 let fbDb=null, fbAuth=null, fbReady=false, fbApplyingRemote=false;
 let readOnly=false;
+let currentRole=null; // admin, lecteur ou local
 let dernierBilanImport='';
 try{
   if(window.firebase){
@@ -1255,6 +1264,7 @@ const TABS = [
   {id:'edt', label:'🗓️ Emploi du temps'},
   {id:'auto', label:'🤖 Génération auto'},
   {id:'absences', label:'🚫 Absences'},
+  {id:'heures', label:'🕒 Gestion des heures'},
   {id:'aide', label:'❓ Aide'}
 ];
 let currentTab = 'config';
@@ -1343,6 +1353,7 @@ function renderMain(){
   if(currentTab==='edt') renderEDT(app);
   if(currentTab==='auto') renderAuto(app);
   if(currentTab==='absences') renderAbsences(app);
+  if(currentTab==='heures') renderGestionHeures(app);
   if(currentTab==='aide') renderAide(app);
   // Le fond est réappliqué après chaque reconstruction de l’interface.
   try{ applyAppWallpaper(); }catch(e){ console.warn('Réapplication du fond impossible',e); }
@@ -1947,6 +1958,37 @@ function ensureLib(nom){
   return libPromises[nom];
 }
 
+// ---------- MODULE ADMIN : BILAN ET EVALUATION DES HEURES ----------
+const HEURES_COLLECTION='heures_effectuees';
+let heuresRecords=[];
+let heuresLoaded=false;
+let heuresLoading=false;
+function heuresAdminAutorise(){return currentRole==='admin'&&!readOnly&&fbReady&&!!fbAuth&&!!fbAuth.currentUser&&fbAuth.currentUser.emailVerified;}
+function heuresMois(d){return String(d||'').slice(0,7);}
+function heuresFmt(n){return (Number(n)||0).toLocaleString('fr-FR',{maximumFractionDigits:2});}
+function heuresEl(tag,attrs={},txt){const e=document.createElement(tag);Object.entries(attrs).forEach(([k,v])=>{if(k==='class')e.className=v;else if(k==='html')e.innerHTML=v;else e.setAttribute(k,v);});if(txt!==undefined)e.textContent=txt;return e;}
+async function chargerDonneesHeures(){if(!heuresAdminAutorise())throw new Error('Connexion administrateur requise.');heuresLoading=true;try{const r=await fbDb.collection(HEURES_COLLECTION).get();heuresRecords=r.docs.map(d=>({id:d.id,...d.data()}));heuresLoaded=true;}finally{heuresLoading=false;}}
+function renderGestionHeures(app){
+ const card=heuresEl('section',{class:'card'});card.appendChild(heuresEl('h2',{},'🕒 Bilan et évaluation des heures'));card.appendChild(heuresEl('p',{class:'small'},'Enregistre les heures réellement effectuées et consulte les totaux par semaine, mois ou année pour chaque professeur, chaque classe et l’ensemble des professeurs et classes. Aucun calcul de salaire.'));
+ if(!heuresAdminAutorise()){card.appendChild(heuresEl('div',{class:'msg err'},'Module réservé aux administrateurs connectés avec un compte Firebase vérifié.'));app.appendChild(card);return;}
+ const toolbar=heuresEl('div',{class:'row'}),reload=heuresEl('button',{class:'btn secondary'},'↻ Actualiser'),print=heuresEl('button',{class:'btn secondary'},'🖨️ Imprimer / PDF'),exportBtn=heuresEl('button',{class:'btn secondary'},'⬇️ Exporter CSV');reload.onclick=async()=>{try{await chargerDonneesHeures();renderMain();}catch(e){alert('Lecture impossible : '+e.message);}};print.onclick=()=>window.print();exportBtn.onclick=exporterHeuresCSV;toolbar.append(reload,print,exportBtn);card.appendChild(toolbar);
+ if(!heuresLoaded){const b=heuresEl('button',{class:'btn'},heuresLoading?'Chargement…':'Charger les données');b.disabled=heuresLoading;b.onclick=async()=>{try{await chargerDonneesHeures();renderMain();}catch(e){alert('Chargement Firebase impossible. Vérifie les règles Firestore. Détail : '+e.message);}};card.append(heuresEl('div',{class:'msg'},'Charge les données enregistrées dans Firebase pour commencer.'),b);app.appendChild(card);return;}
+ const form=heuresEl('form',{class:'card'});form.style.marginTop='14px';form.appendChild(heuresEl('h3',{},'＋ Enregistrer des heures effectuées'));const grid=heuresEl('div',{class:'grid2'});function field(label,el){const w=heuresEl('label',{class:'field'});w.append(heuresEl('span',{},label),el);grid.appendChild(w);return el;}
+ const now=new Date(),today=[now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
+ const date=field('Date du cours',heuresEl('input',{type:'date',required:'required',value:today}));const prof=heuresEl('select',{required:'required'});prof.appendChild(heuresEl('option',{value:''},'Choisir un professeur'));(state.profs||[]).slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).forEach(p=>prof.appendChild(heuresEl('option',{value:p.id},p.nom)));field('Professeur',prof);
+ const ecole=heuresEl('select',{required:'required'});ecole.appendChild(heuresEl('option',{value:''},'Choisir un établissement'));(state.ecoles||[]).forEach(e=>ecole.appendChild(heuresEl('option',{value:e.id},e.nom)));field('Établissement',ecole);const classe=field('Classe / groupe',heuresEl('input',{type:'text',required:'required',placeholder:'Ex. 3e A'}));const matiere=field('Matière',heuresEl('input',{type:'text',required:'required',placeholder:'Matière enseignée'}));const duree=field('Durée effectuée (heures)',heuresEl('input',{type:'number',required:'required',min:'0.25',max:'24',step:'0.25',placeholder:'Ex. 2'}));const type=heuresEl('select',{});[['cours','Cours normal'],['remplacement','Remplacement'],['rattrapage','Rattrapage']].forEach(([v,l])=>type.appendChild(heuresEl('option',{value:v},l)));field('Type de séance',type);const statut=heuresEl('select',{});[['validee','Validée'],['a_valider','À vérifier'],['annulee','Annulée']].forEach(([v,l])=>statut.appendChild(heuresEl('option',{value:v},l)));field('État de la séance',statut);const note=field('Observation (facultatif)',heuresEl('input',{type:'text',placeholder:'Remplacement, rattrapage…'}));form.append(grid,heuresEl('button',{class:'btn',type:'submit'},'Enregistrer les heures'));
+ form.onsubmit=async ev=>{ev.preventDefault();if(!heuresAdminAutorise())return alert('Session administrateur requise.');const h=Number(duree.value);if(!Number.isFinite(h)||h<.25||h>24)return alert('La durée doit être comprise entre 0,25 et 24 heures.');const doc={date:date.value,mois:heuresMois(date.value),profId:prof.value,profNom:prof.options[prof.selectedIndex].text,ecole:ecole.value,ecoleNom:ecole.options[ecole.selectedIndex].text,classe:classe.value.trim(),matiere:matiere.value.trim(),heures:h,typeSeance:type.value,statut:statut.value,observation:note.value.trim(),creePar:fbAuth.currentUser.email,creeLe:firebase.firestore.FieldValue.serverTimestamp(),modifieLe:firebase.firestore.FieldValue.serverTimestamp()};try{const ref=await fbDb.collection(HEURES_COLLECTION).add(doc);heuresRecords.push({id:ref.id,...doc});renderMain();}catch(e){alert('Enregistrement refusé par Firebase. Détail : '+e.message);}};card.appendChild(form);
+ const report=heuresEl('section',{class:'card'});report.style.marginTop='14px';report.appendChild(heuresEl('h3',{},'📊 Tableau de bord'));const filters=heuresEl('div',{class:'row'});const mode=heuresEl('select',{});[['semaine','Semaine'],['mois','Mois'],['annee','Année']].forEach(([v,l])=>mode.appendChild(heuresEl('option',{value:v},l)));const dateF=heuresEl('input',{type:'date',value:today}),monthF=heuresEl('input',{type:'month',value:today.slice(0,7)}),yearF=heuresEl('input',{type:'number',min:'2000',max:'2100',value:String(now.getFullYear())});const fp=heuresEl('select',{});fp.appendChild(heuresEl('option',{value:''},'Tous les professeurs'));(state.profs||[]).slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).forEach(p=>fp.appendChild(heuresEl('option',{value:p.id},p.nom)));const fc=heuresEl('select',{});fc.appendChild(heuresEl('option',{value:''},'Toutes les classes'));const classes=[...new Set(heuresRecords.map(r=>(r.ecoleNom||r.ecole||'')+' / '+(r.classe||'')).filter(x=>x!==' / '))].sort();classes.forEach(c=>fc.appendChild(heuresEl('option',{value:c},c)));filters.append(heuresEl('span',{},'Période :'),mode,dateF,monthF,yearF,fp,fc);report.appendChild(filters);const out=heuresEl('div');report.appendChild(out);
+ function range(){if(mode.value==='mois'){const v=monthF.value;return {start:v+'-01',end:v? v+'-'+String(new Date(+v.slice(0,4),+v.slice(5,7),0).getDate()).padStart(2,'0'):''};}if(mode.value==='annee'){const y=String(yearF.value);return {start:y+'-01-01',end:y+'-12-31'};}const d=new Date((dateF.value||today)+'T12:00:00');d.setDate(d.getDate()-(d.getDay()+6)%7);const start=[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');d.setDate(d.getDate()+6);return {start,end:[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};}
+ function redraw(){out.innerHTML='';const rg=range(),all=heuresRecords.filter(r=>r.date&&r.date>=rg.start&&r.date<=rg.end&&(!fp.value||r.profId===fp.value)&&(!fc.value||((r.ecoleNom||r.ecole||'')+' / '+(r.classe||''))===fc.value)),valid=all.filter(r=>r.statut==='validee'),pending=all.filter(r=>r.statut==='a_valider'||!r.statut),sum=a=>a.reduce((n,r)=>n+(Number(r.heures)||0),0),total=sum(valid),pendingTotal=sum(pending);const nprofs=(state.profs||[]).length;const knownClasses=new Set(heuresRecords.map(r=>(r.ecoleNom||r.ecole||'')+' / '+(r.classe||'')).filter(x=>x!==' / '));try{const d=cd();(state.ecoles||[]).forEach(e=>Object.keys((d.classes&&d.classes[e.id])||{}).forEach(k=>{const raw=d.classes[e.id][k],cl=typeof raw==='string'?raw:(raw&&raw.nom)||k;if(cl)knownClasses.add(e.nom+' / '+cl);}));}catch(e){}const nclasses=knownClasses.size;out.appendChild(heuresEl('p',{class:'small'},`Période : ${rg.start} au ${rg.end}. Les totaux principaux incluent uniquement les séances validées. Les séances à vérifier sont séparées et les séances annulées sont exclues.`));const metrics=heuresEl('div',{class:'grid2'});[['Total des heures validées',heuresFmt(total)+' h'],['Heures à vérifier',heuresFmt(pendingTotal)+' h'],['Nombre total de professeurs',String(nprofs)],['Classes recensées (emploi du temps et séances)',String(nclasses)]].forEach(([l,v])=>{const b=heuresEl('div',{class:'card'});b.append(heuresEl('strong',{},l),heuresEl('div',{class:'metric-value'},v));metrics.appendChild(b);});out.appendChild(metrics);
+ function summary(title,rows,empty){out.appendChild(heuresEl('h3',{},title));const wrap=heuresEl('div',{class:'table-wrap'}),t=heuresEl('table',{class:'data-table'});t.innerHTML='<thead><tr><th>Nom</th><th>Total validé (h)</th><th>Séances</th></tr></thead>';const body=heuresEl('tbody'),vals=Object.values(rows).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));vals.forEach(x=>{const tr=heuresEl('tr');[x.nom,heuresFmt(x.heures),String(x.seances)].forEach(v=>tr.appendChild(heuresEl('td',{},v)));body.appendChild(tr);});if(!vals.length){const tr=heuresEl('tr');tr.appendChild(heuresEl('td',{colspan:'3'},empty));body.appendChild(tr);}t.appendChild(body);wrap.appendChild(t);out.appendChild(wrap);}
+ const ap={},ac={};(state.profs||[]).forEach(p=>{ap[p.id]={nom:p.nom,heures:0,seances:0};});try{const d=cd();(state.ecoles||[]).forEach(e=>Object.keys((d.classes&&d.classes[e.id])||{}).forEach(k=>{const raw=d.classes[e.id][k],cl=typeof raw==='string'?raw:(raw&&raw.nom)||k,ck=e.nom+' / '+cl;if(cl&&!ac[ck])ac[ck]={nom:ck,heures:0,seances:0};}));}catch(e){}heuresRecords.forEach(r=>{const ck=(r.ecoleNom||r.ecole||'Établissement non précisé')+' / '+(r.classe||'Classe non précisée');if(!ac[ck])ac[ck]={nom:ck,heures:0,seances:0};});valid.forEach(r=>{const pk=r.profId||r.profNom||'inconnu';if(!ap[pk])ap[pk]={nom:r.profNom||pk,heures:0,seances:0};ap[pk].heures+=Number(r.heures)||0;ap[pk].seances++;const ck=(r.ecoleNom||r.ecole||'Établissement non précisé')+' / '+(r.classe||'Classe non précisée');if(!ac[ck])ac[ck]={nom:ck,heures:0,seances:0};ac[ck].heures+=Number(r.heures)||0;ac[ck].seances++;});summary('👤 Total par professeur',ap,'Aucune heure validée.');summary('🏫 Total par classe',ac,'Aucune heure validée.');
+ const wrap=heuresEl('div',{class:'table-wrap'});wrap.style.marginTop='14px';const t=heuresEl('table',{class:'data-table'});t.innerHTML='<thead><tr><th>Date</th><th>Professeur</th><th>Établissement / classe</th><th>Matière</th><th>Type</th><th>Heures</th><th>État</th><th>Actions</th></tr></thead>';const body=heuresEl('tbody');all.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{const tr=heuresEl('tr');[r.date||'',r.profNom||'',(r.ecoleNom||r.ecole||'')+' / '+(r.classe||''),r.matiere||'',({cours:'Cours normal',remplacement:'Remplacement',rattrapage:'Rattrapage'}[r.typeSeance]||'Cours normal'),heuresFmt(r.heures),({a_valider:'À vérifier',validee:'Validée',annulee:'Annulée'}[r.statut]||'À vérifier')].forEach(v=>tr.appendChild(heuresEl('td',{},v)));const actions=heuresEl('td'),val=heuresEl('button',{class:'btn secondary'},r.statut==='validee'?'Validée ✓':'Valider'),cancel=heuresEl('button',{class:'btn danger'},'Annuler');val.disabled=r.statut==='validee'||r.statut==='annulee';val.onclick=async()=>{try{await fbDb.collection(HEURES_COLLECTION).doc(r.id).update({statut:'validee',validePar:fbAuth.currentUser.email,valideLe:firebase.firestore.FieldValue.serverTimestamp(),modifieLe:firebase.firestore.FieldValue.serverTimestamp()});r.statut='validee';redraw();}catch(e){alert('Validation refusée : '+e.message);}};cancel.disabled=r.statut==='annulee';cancel.onclick=async()=>{if(!confirm('Annuler cette séance ? Elle restera dans l’historique.'))return;try{await fbDb.collection(HEURES_COLLECTION).doc(r.id).update({statut:'annulee',annulePar:fbAuth.currentUser.email,annuleLe:firebase.firestore.FieldValue.serverTimestamp(),modifieLe:firebase.firestore.FieldValue.serverTimestamp()});r.statut='annulee';redraw();}catch(e){alert('Annulation refusée : '+e.message);}};actions.append(val,cancel);tr.appendChild(actions);body.appendChild(tr);});t.appendChild(body);wrap.appendChild(t);out.append(heuresEl('h3',{},'🧾 Détail des séances'),wrap);
+ }
+ mode.onchange=()=>{dateF.style.display=mode.value==='semaine'?'':'none';monthF.style.display=mode.value==='mois'?'':'none';yearF.style.display=mode.value==='annee'?'':'none';redraw();};[dateF,monthF,yearF,fp,fc].forEach(x=>x.onchange=redraw);mode.onchange();app.appendChild(report);
+}
+function exporterHeuresCSV(){if(!heuresAdminAutorise())return alert('Accès administrateur requis.');const rows=[['Date','Mois','Professeur','Établissement','Classe','Matière','Type de séance','Heures','État','Observation']];heuresRecords.forEach(r=>rows.push([r.date,r.mois||heuresMois(r.date),r.profNom,r.ecoleNom,r.classe,r.matiere,r.typeSeance||'cours',r.heures,({a_valider:'À vérifier',validee:'Validée',annulee:'Annulée'}[r.statut]||r.statut),r.observation||'']));const csv='\ufeff'+rows.map(row=>row.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(';')).join('\r\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='smanager_bilan_heures.csv';a.click();URL.revokeObjectURL(url);}
+
 // ---------- RÔLES (l'application masque ce qui est interdit ; ce sont les règles Firestore qui font foi) ----------
 // Les adresses ne sont pas écrites en clair dans le code public : seules leurs empreintes (SHA-256) y figurent.
 const HASH_ADMINS=["0a8f4d44a927f58397b93be3066fa5bfc8e1789a8f7381fc18fc0d28aad762f7", "a413026460479f9b67efd48e83056c7257ae1112069ce6d0e69b0299ac4fc8b1", "c13fd7e8ccadc6824b978b1a26fd26573d5e5d5e70207ab94f19b45323722482", "4eb120d6f9a68144a8287ea9f1bedd1d8a8aafb856d2448045f729d2cb5e4acc"];
@@ -1964,7 +2006,11 @@ async function roleDe(email){
   if(HASH_LECTEURS.includes(h)) return 'lecteur';
   return null;
 }
-function visibleTabs(){ return readOnly ? TABS.filter(t=>t.id==='edt'||t.id==='aide') : TABS; }
+function visibleTabs(){
+  if(readOnly) return TABS.filter(t=>t.id==='edt'||t.id==='aide');
+  if(currentRole!=='admin') return TABS.filter(t=>t.id!=='heures');
+  return TABS;
+}
 
 // ---------- IMPORT SOUPLE DES PROFESSEURS (Excel) ET FUSION DES DOUBLONS ----------
 function normTxt(s){ return String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim(); }
@@ -3282,7 +3328,7 @@ if(fbReady && fbAuth){
   const authMsg=document.getElementById('authMsg');
   const authTitle=document.getElementById('authTitle');
   const authSkip=document.getElementById('authSkip');
-  authSkip.onclick=()=>{ fbReady=false; readOnly=false; startApp(); };
+  authSkip.onclick=()=>{ fbReady=false; readOnly=false; currentRole='local'; startApp(); };
   let mode='login', pendingRole=null;
   authToggle.onclick=()=>{
     mode = mode==='login' ? 'signup' : 'login';
@@ -3324,6 +3370,7 @@ if(fbReady && fbAuth){
     if(cu && cu.emailVerified){
       try{ await cu.getIdToken(true); }catch(e){}
       readOnly=(pendingRole==='lecteur');
+      currentRole=pendingRole;
       startApp();
     } else {
       document.getElementById('verifMsg').innerHTML='<div class="msg err">Adresse pas encore vérifiée. Clique d\'abord sur le lien reçu par e-mail.</div>';
@@ -3334,7 +3381,7 @@ if(fbReady && fbAuth){
   fbAuth.onAuthStateChanged(async user=>{
     if(!user){
       if(unsubSnap){ try{ unsubSnap(); }catch(e){} unsubSnap=null; }
-      __appStarted=false; readOnly=false;
+      __appStarted=false; readOnly=false; currentRole=null;
       showAuthScreen(); return;
     }
     const role=await roleDe(user.email);
@@ -3342,6 +3389,7 @@ if(fbReady && fbAuth){
     pendingRole=role;
     if(!user.emailVerified){ showVerifScreen(user); return; }
     readOnly=(role==='lecteur');
+    currentRole=role;
     startApp();
   });
 } else {
