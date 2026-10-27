@@ -1694,7 +1694,7 @@ function openProfEditor(profId){
     +'<label>Diplôme</label><input type="text" id="ePDiplome" placeholder="Ex: Doctorat">'
     +'<label>Photo</label><div class="row"><input type="file" id="ePPhoto" accept="image/*" style="width:auto;"><span id="ePPhotoPrev"></span></div>'
     +'<label>Écoles où il/elle intervient</label><div class="row" id="ePEcoles"></div>'
-    +'<label>Matières enseignées</label><div id="ePMatieres" style="max-height:150px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px;display:flex;flex-wrap:wrap;gap:4px 14px;"></div>'
+    +'<label>Matières enseignées <span class="small">(facultatif)</span></label><div id="ePMatieres" style="max-height:150px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px;display:flex;flex-wrap:wrap;gap:4px 14px;"></div>'
     +'<label>Disponibilités <span class="small">(clique une case, un jour ou une heure pour basculer)</span></label>'
     +'<div class="row"><button type="button" class="btn ghost small" id="eAll">Tout cocher</button><button type="button" class="btn ghost small" id="eNone">Tout décocher</button></div>'
     +'<div class="gridwrap" style="margin:0;padding:0;"><div id="ePDispo"></div></div>'
@@ -1789,7 +1789,7 @@ function buildProfForm(){
     <div id="pPhotoPreview"></div>
     <label class="small">Diplôme obtenu (ex: Doctorat, Master, Licence, BTS...)</label>
     <div class="row"><input type="text" id="pDiplome" placeholder="Ex: Doctorat"></div>
-    <label class="small">Matières enseignées</label>
+    <label class="small">Matières enseignées <span class="small">(facultatif : tu peux les attribuer plus tard)</span></label>
     <div class="row" id="pMatieres"></div>
     <label class="small">Écoles où il/elle intervient</label>
     <div class="row" id="pEcoles"></div>
@@ -1854,8 +1854,8 @@ function buildProfForm(){
       const matieres = [...wrap.querySelectorAll('#pMatieres input:checked')].map(i=>i.value);
       const ecoles = [...wrap.querySelectorAll('#pEcoles input:checked')].map(i=>i.value);
       const msg=wrap.querySelector('#pMsg');
-      if(!nom || matieres.length===0 || ecoles.length===0){
-        msg.innerHTML='<div class="msg err">Nom, au moins une matière et une école sont requis.</div>'; return;
+      if(!nom || ecoles.length===0){
+        msg.innerHTML='<div class="msg err">Le nom et au moins une école sont requis. Les matières peuvent être attribuées plus tard.</div>'; return;
       }
       state.profs.push({id:uid(), nom, age, lieuNaissance, telephone, photo:photoData, diplome, matieres, ecoles, dispo});
       save();
@@ -2303,7 +2303,7 @@ function computeClasseSheet(ecole, classe){
     vues.add(g.matiere);
     const prof=state.profs.find(p=>p.id===g.profId);
     const def=fil?fil.matieres.find(m=>m.nom===g.matiere):null;
-    lignes.push([g.matiere, prof?prof.nom:'?', (prof&&prof.telephone)||'—', def?(g.h+' / '+def.heures):String(g.h)]);
+    lignes.push([g.matiere, prof?prof.nom:'Professeur non attribué', (prof&&prof.telephone)||'—', def?(g.h+' / '+def.heures):String(g.h)]);
   });
   if(fil){
     fil.matieres.forEach(m=>{
@@ -2318,7 +2318,7 @@ function computeClasseSheet(ecole, classe){
     ecoleLabel:ecoleNom(ecole), annee:state.anneeActuelle, titre:'EMPLOI DU TEMPS CLASSE', photo:null,
     info:[['Classe',classe],['École',ecoleNom(ecole)],['Filière',fil?fil.code:'—']],
     tables:[{titre:'Professeurs, matières et heures (placées / prévues) — total placé : '+Object.keys(emploi).length+' h', headers:['Matière','Professeur','Téléphone','Heures'], rows:lignes}],
-    cellText:(j,cren)=>{ const v=emploi[j+'|'+cren]; if(!v) return ''; const p=state.profs.find(p=>p.id===v.profId); return (v.matiere+' — '+(p?p.nom:'?')+' '+(v.salle||'')).trim(); }
+    cellText:(j,cren)=>{ const v=emploi[j+'|'+cren]; if(!v) return ''; const p=state.profs.find(p=>p.id===v.profId); return (v.matiere+' — '+(p?p.nom:'Professeur non attribué')+' '+(v.salle||'')).trim(); }
   };
 }
 
@@ -2674,7 +2674,7 @@ function attemptSave(ecole, classe, jour, cren, matiere, profId, salle){
   }
 
   // Le professeur ne peut être à 2 endroits à la fois
-  const conflitProf = profBusy(profId, jour, cren, ecole, classe);
+  const conflitProf = profId ? profBusy(profId, jour, cren, ecole, classe) : null;
   if(conflitProf){
     if(!confirm(`Ce professeur est déjà programmé pour ${conflitProf.classe} (${ecoleNom(conflitProf.ecole)}) à cet horaire. Retirer cette heure-là pour l'assigner ici à la place ?`)) return false;
     overrides.push(conflitProf);
@@ -2835,7 +2835,7 @@ function renderEDT_classe(app){
         const v = d.emploi[ecole][classe][key];
         if(v){
           const prof=state.profs.find(p=>p.id===v.profId);
-          rows+=`<td class="cell busy" data-jour="${j}" data-cren="${cren}"><b>${v.matiere}</b>${prof?prof.nom:'?'}<br><span class="small">${v.salle||''}</span></td>`;
+          rows+=`<td class="cell busy" data-jour="${j}" data-cren="${cren}"><b>${v.matiere}</b>${prof?esc(prof.nom):'<span style="color:var(--warn);font-weight:700;">Professeur non attribué</span>'}<br><span class="small">${v.salle?esc(v.salle):''}</span></td>`;
         } else {
           rows+=`<td class="cell" data-jour="${j}" data-cren="${cren}"></td>`;
         }
@@ -2867,8 +2867,8 @@ function openCellEditor(ecole, classe, jour, cren){
   body.innerHTML = `<h3>${classe} — ${jour} ${cren}</h3>
     ${fil?'':'<p class="small" style="color:var(--warn);">Aucune filière associée à cette classe : toutes les matières sont proposées. Associe une filière dans Configuration pour restreindre cette liste.</p>'}
     <label>Matière${fil?' (limitée à la filière '+fil.code+')':''}</label><select id="mSel"></select>
-    <label>Professeur</label><select id="pSel"></select>
-    <label>Salle</label><select id="sSel"></select>
+    <label>Professeur <span class="small">(facultatif, tu peux l'attribuer plus tard)</span></label><select id="pSel"></select>
+    <label>Salle <span class="small">(facultatif)</span></label><select id="sSel"></select>
     <div id="mMsg"></div>
     <div class="row" style="margin-top:12px;">
       <button class="btn" id="mSave">Enregistrer</button>
@@ -2882,10 +2882,11 @@ function openCellEditor(ecole, classe, jour, cren){
   function refreshProfs(){
     pSel.innerHTML='<option value="">— choisir —</option>';
     const besoinAffecte = cd().besoins.find(b=>b.ecole===ecole && b.classe===classe && b.matiere===mSel.value && b.profId);
-    state.profs.filter(p=>p.matieres.includes(mSel.value) && p.ecoles.includes(ecole)).forEach(p=>{
-      const dispoOk = p.dispo[jour+'|'+cren];
+    state.profs.filter(p=>(!p.ecoles.length || p.ecoles.includes(ecole))).forEach(p=>{
+      const dispoOk = p.dispo && p.dispo[jour+'|'+cren];
       const conflit = profBusy(p.id, jour, cren, ecole, classe);
       let label = p.nom;
+      if(!(p.matieres||[]).includes(mSel.value)) label+=' (matière non renseignée pour ce professeur)';
       if(besoinAffecte && besoinAffecte.profId===p.id) label+=' ★ affecté à cette matière';
       if(!dispoOk) label+=' (non disponible à cette heure)';
       else if(conflit) label+=` (déjà occupé — ${ecoleNom(conflit.ecole)}/${conflit.classe})`;
@@ -2895,7 +2896,7 @@ function openCellEditor(ecole, classe, jour, cren){
     });
     const oNew=document.createElement('option'); oNew.value='__new__'; oNew.textContent='+ Ajouter un nouveau professeur…';
     pSel.appendChild(oNew);
-    if(existing) pSel.value = existing.profId;
+    if(existing) pSel.value = existing.profId || '';
     else if(besoinAffecte){ const pa=state.profs.find(x=>x.id===besoinAffecte.profId); if(pa && pa.dispo[jour+'|'+cren]) pSel.value = besoinAffecte.profId; }
   }
   pSel.onchange=()=>{
@@ -2913,15 +2914,18 @@ function openCellEditor(ecole, classe, jour, cren){
     nomsSalles(ecole).forEach(s=>{
       const occ = salleBusy(ecole, s, jour, cren, classe);
       const o=document.createElement('option'); o.value=s; o.textContent = occ? `${s} (occupée par ${occ})` : s;
+      if(occ) o.disabled=true;
       sSel.appendChild(o);
     });
-    if(existing) sSel.value = existing.salle;
+    if(existing) sSel.value = existing.salle || '';
   }
   mSel.onchange=refreshProfs; refreshProfs(); refreshSalles();
   body.querySelector('#mSave').onclick=()=>{
     const msg=body.querySelector('#mMsg');
-    if(!mSel.value || !pSel.value || !sSel.value){ msg.innerHTML='<div class="msg err">Remplis les 3 champs.</div>'; return; }
-    const ok = attemptSave(ecole, classe, jour, cren, mSel.value, pSel.value, sSel.value);
+    if(!mSel.value){ msg.innerHTML='<div class="msg err">Choisis une matière. Le professeur et la salle sont facultatifs.</div>'; return; }
+    const profId = pSel.value && pSel.value!=='__new__' ? pSel.value : null;
+    const salle = sSel.value || null;
+    const ok = attemptSave(ecole, classe, jour, cren, mSel.value, profId, salle);
     if(!ok) return;
     overlay.classList.remove('show'); window.__drawGrid && window.__drawGrid();
   };
