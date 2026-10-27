@@ -202,8 +202,8 @@ try{
 
 function mkSalles(names){ return names.map(n=>({nom:n, exclureAuto:false})); }
 function toutesDispoParDefaut(){
-  const jours=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
-  const creneaux=['07h30-08h25','08h25-09h20','09h20-10h15','10h15-11h10','11h10-12h05','12h05-13h00','13h00-13h55','13h55-14h50','14h50-15h45','15h45-16h40','16h40-17h35'];
+  const jours=(typeof state!=='undefined'&&state.jours&&state.jours.length)?state.jours:['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+  const creneaux=(typeof state!=='undefined'&&state.creneaux&&state.creneaux.length)?state.creneaux:['07h30-08h25','08h25-09h20','09h20-10h15','10h15-11h10','11h10-12h05','12h05-13h00','13h00-13h55','13h55-14h50','14h50-15h45','15h45-16h40','16h40-17h35'];
   const d={}; jours.forEach(j=>creneaux.forEach(c=>{ d[j+'|'+c]=true; })); return d;
 }
 const DEFAULT_ANNEE = '2026-2027';
@@ -1218,6 +1218,18 @@ let state = load() || {
     ]}
   ] // {id, code, matieres:[{nom,heures}]}
 };
+// Migration des disponibilités : les créneaux non renseignés sont disponibles par défaut.
+// Les indisponibilités explicitement enregistrées (false) sont conservées.
+try {
+  let dispoModifiee=false;
+  (state.profs||[]).forEach(p=>{
+    if(!p.dispo || typeof p.dispo!=='object' || Object.keys(p.dispo).length===0){ p.dispo=toutesDispoParDefaut(); dispoModifiee=true; return; }
+    (state.jours||[]).forEach(j=>(state.creneaux||[]).forEach(c=>{ const k=j+'|'+c; if(typeof p.dispo[k]==='undefined'){p.dispo[k]=true;dispoModifiee=true;} }));
+  });
+  (state.ecoles||[]).forEach(e=>(state.salles&&state.salles[e.id]||[]).forEach(sa=>{if(typeof sa.exclureAuto==='undefined'){sa.exclureAuto=false;dispoModifiee=true;}}));
+  if(dispoModifiee && typeof readOnly!=='undefined' && !readOnly) localStorage.setItem('edt_v1',JSON.stringify(state));
+} catch(e){ console.warn('Migration des disponibilités par défaut impossible',e); }
+
 function save(){ if(readOnly) return; try{ localStorage.setItem('edt_v1', JSON.stringify(state)); localStorage.setItem('edt_v1_ts', String(Date.now())); }catch(e){} scheduleCloudSave(); }
 let fbSaveTimer=null;
 function scheduleCloudSave(){
@@ -1461,7 +1473,7 @@ function renderConfig(app){
   state.ecoles.forEach(s=>{
     const c=document.createElement('div'); c.className='card';
     c.innerHTML=`<h2>${s.nom} <span class="badge">${s.zone}</span></h2>`;
-    const p2=document.createElement('p'); p2.className='small'; p2.textContent='Salles disponibles (case = exclure de la génération automatique)'; c.appendChild(p2);
+    const p2=document.createElement('p'); p2.className='small'; p2.textContent='Salles (optionnel) : coche une case pour exclure cette salle de la génération automatique. Si aucune salle n’est activée, les emplois du temps peuvent être générés sans affectation de salle.'; c.appendChild(p2);
     const salleWrap=document.createElement('div'); salleWrap.className='row';
     state.salles[s.id].forEach((sa,i)=>{
       const box=document.createElement('span'); box.className='badge'; box.style.display='flex'; box.style.gap='5px'; box.style.alignItems='center';
@@ -1809,7 +1821,7 @@ function buildProfForm(){
       lbl.innerHTML=`<input type="checkbox" value="${s.id}"> ${s.nom}`;
       eDiv.appendChild(lbl);
     });
-    const dispo={};
+    const dispo=toutesDispoParDefaut();
     const grid=wrap.querySelector('#pDispoGrid');
     function drawGridDispo(){
       grid.className='availgrid';
@@ -1982,14 +1994,14 @@ async function chargerDonneesHeures(){if(!heuresAdminAutorise())throw new Error(
 function renderGestionHeures(app){
  const card=heuresEl('section',{class:'card'});card.appendChild(heuresEl('h2',{},'🕒 Bilan et évaluation des heures'));card.appendChild(heuresEl('p',{class:'small'},'Enregistre les heures réellement effectuées et consulte les totaux par semaine, mois ou année pour chaque professeur, chaque classe et l’ensemble des professeurs et classes. Aucun calcul de salaire.'));
  if(!heuresAdminAutorise()){card.appendChild(heuresEl('div',{class:'msg err'},'Module réservé aux administrateurs connectés avec un compte Firebase vérifié.'));app.appendChild(card);return;}
- const toolbar=heuresEl('div',{class:'row'}),reload=heuresEl('button',{class:'btn secondary'},'↻ Actualiser'),printBtn=heuresEl('button',{class:'btn secondary'},'🖨️ Imprimer tableaux et graphiques'),pdfBtn=heuresEl('button',{class:'btn secondary'},'📄 Exporter le bilan PDF'),excelBtn=heuresEl('button',{class:'btn secondary'},'📊 Exporter le bilan Excel');reload.onclick=async()=>{try{await chargerDonneesHeures();renderMain();}catch(e){alert('Lecture impossible : '+e.message);}};printBtn.onclick=imprimerBilanHeures;pdfBtn.onclick=exporterHeuresPDF;excelBtn.onclick=exporterHeuresExcel;toolbar.append(reload,printBtn,pdfBtn,excelBtn);card.appendChild(toolbar);
+ const toolbar=heuresEl('div',{class:'row'}),reload=heuresEl('button',{class:'btn secondary'},'↻ Actualiser'),printBtn=heuresEl('button',{class:'btn secondary'},'🖨️ Imprimer tableaux et graphiques'),pdfBtn=heuresEl('button',{class:'btn secondary'},'📄 Exporter le bilan PDF'),excelBtn=heuresEl('button',{class:'btn secondary'},'📊 Exporter le bilan Excel');reload.onclick=async()=>{try{await chargerDonneesHeures();renderMain();}catch(e){alert('Lecture impossible : '+e.message);}};printBtn.onclick=imprimerBilanHeures;pdfBtn.onclick=exporterHeuresPDF;excelBtn.onclick=exporterHeuresExcel;toolbar.append(reload);card.appendChild(toolbar);
  if(!heuresLoaded){const b=heuresEl('button',{class:'btn'},heuresLoading?'Chargement…':'Charger les données');b.disabled=heuresLoading;b.onclick=async()=>{try{await chargerDonneesHeures();renderMain();}catch(e){alert('Chargement Firebase impossible. Vérifie les règles Firestore. Détail : '+e.message);}};card.append(heuresEl('div',{class:'msg'},'Charge les données enregistrées dans Firebase pour commencer.'),b);app.appendChild(card);return;}
  const form=heuresEl('form',{class:'card'});form.style.marginTop='14px';form.appendChild(heuresEl('h3',{},'＋ Enregistrer des heures effectuées'));const grid=heuresEl('div',{class:'grid2'});function field(label,el){const w=heuresEl('label',{class:'field'});w.append(heuresEl('span',{},label),el);grid.appendChild(w);return el;}
  const now=new Date(),today=[now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
  const date=field('Date du cours',heuresEl('input',{type:'date',required:'required',value:today}));const prof=heuresEl('select',{required:'required'});prof.appendChild(heuresEl('option',{value:''},'Choisir un professeur'));(state.profs||[]).slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).forEach(p=>prof.appendChild(heuresEl('option',{value:p.id},p.nom)));field('Professeur',prof);
  const ecole=heuresEl('select',{required:'required'});ecole.appendChild(heuresEl('option',{value:''},'Choisir un établissement'));(state.ecoles||[]).forEach(e=>ecole.appendChild(heuresEl('option',{value:e.id},e.nom)));field('Établissement',ecole);const classe=field('Classe / groupe',heuresEl('input',{type:'text',required:'required',placeholder:'Ex. 3e A'}));const matiere=field('Matière',heuresEl('input',{type:'text',required:'required',placeholder:'Matière enseignée'}));const duree=field('Durée effectuée (heures)',heuresEl('input',{type:'number',required:'required',min:'0.25',max:'24',step:'0.25',placeholder:'Ex. 2'}));const type=heuresEl('select',{});[['cours','Cours normal'],['remplacement','Remplacement'],['rattrapage','Rattrapage']].forEach(([v,l])=>type.appendChild(heuresEl('option',{value:v},l)));field('Type de séance',type);const statut=heuresEl('select',{});[['validee','Validée'],['a_valider','À vérifier'],['annulee','Annulée']].forEach(([v,l])=>statut.appendChild(heuresEl('option',{value:v},l)));field('État de la séance',statut);const note=field('Observation (facultatif)',heuresEl('input',{type:'text',placeholder:'Remplacement, rattrapage…'}));form.append(grid,heuresEl('button',{class:'btn',type:'submit'},'Enregistrer les heures'));
  form.onsubmit=async ev=>{ev.preventDefault();if(!heuresAdminAutorise())return alert('Session administrateur requise.');const h=Number(duree.value);if(!Number.isFinite(h)||h<.25||h>24)return alert('La durée doit être comprise entre 0,25 et 24 heures.');const doc={date:date.value,mois:heuresMois(date.value),profId:prof.value,profNom:prof.options[prof.selectedIndex].text,ecole:ecole.value,ecoleNom:ecole.options[ecole.selectedIndex].text,classe:classe.value.trim(),matiere:matiere.value.trim(),heures:h,typeSeance:type.value,statut:statut.value,observation:note.value.trim(),creePar:fbAuth.currentUser.email,creeLe:firebase.firestore.FieldValue.serverTimestamp(),modifieLe:firebase.firestore.FieldValue.serverTimestamp()};try{const ref=await fbDb.collection(HEURES_COLLECTION).add(doc);heuresRecords.push({id:ref.id,...doc});renderMain();}catch(e){alert('Enregistrement refusé par Firebase. Détail : '+e.message);}};card.appendChild(form);
- const report=heuresEl('section',{class:'card'});report.style.marginTop='14px';report.appendChild(heuresEl('h3',{},'📊 Tableau de bord'));const filters=heuresEl('div',{class:'row'});const mode=heuresEl('select',{});[['semaine','Semaine'],['mois','Mois'],['annee','Année']].forEach(([v,l])=>mode.appendChild(heuresEl('option',{value:v},l)));const dateF=heuresEl('input',{type:'date',value:today}),monthF=heuresEl('input',{type:'month',value:today.slice(0,7)}),yearF=heuresEl('input',{type:'number',min:'2000',max:'2100',value:String(now.getFullYear())});const fp=heuresEl('select',{});fp.appendChild(heuresEl('option',{value:''},'Tous les professeurs'));(state.profs||[]).slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).forEach(p=>fp.appendChild(heuresEl('option',{value:p.id},p.nom)));const fc=heuresEl('select',{});fc.appendChild(heuresEl('option',{value:''},'Toutes les classes'));const classes=[...new Set(heuresRecords.map(r=>(r.ecoleNom||r.ecole||'')+' / '+(r.classe||'')).filter(x=>x!==' / '))].sort();classes.forEach(c=>fc.appendChild(heuresEl('option',{value:c},c)));filters.append(heuresEl('span',{},'Période :'),mode,dateF,monthF,yearF,fp,fc);report.appendChild(filters);const out=heuresEl('div');report.appendChild(out);
+ const report=heuresEl('section',{class:'card'});report.style.marginTop='14px';report.appendChild(heuresEl('h3',{},'📊 Tableau de bord'));const reportTools=heuresEl('div',{class:'row'});reportTools.style.margin='10px 0 14px';const reportPrint=heuresEl('button',{class:'btn secondary'},'🖨️ Imprimer tableaux et graphiques'),reportPdf=heuresEl('button',{class:'btn secondary'},'📄 Exporter le bilan PDF'),reportExcel=heuresEl('button',{class:'btn secondary'},'📊 Exporter le bilan Excel');reportPrint.onclick=imprimerBilanHeures;reportPdf.onclick=exporterHeuresPDF;reportExcel.onclick=exporterHeuresExcel;reportTools.append(reportPrint,reportPdf,reportExcel);report.appendChild(reportTools);const filters=heuresEl('div',{class:'row'});const mode=heuresEl('select',{});[['semaine','Semaine'],['mois','Mois'],['annee','Année']].forEach(([v,l])=>mode.appendChild(heuresEl('option',{value:v},l)));const dateF=heuresEl('input',{type:'date',value:today}),monthF=heuresEl('input',{type:'month',value:today.slice(0,7)}),yearF=heuresEl('input',{type:'number',min:'2000',max:'2100',value:String(now.getFullYear())});const fp=heuresEl('select',{});fp.appendChild(heuresEl('option',{value:''},'Tous les professeurs'));(state.profs||[]).slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).forEach(p=>fp.appendChild(heuresEl('option',{value:p.id},p.nom)));const fc=heuresEl('select',{});fc.appendChild(heuresEl('option',{value:''},'Toutes les classes'));const classes=[...new Set(heuresRecords.map(r=>(r.ecoleNom||r.ecole||'')+' / '+(r.classe||'')).filter(x=>x!==' / '))].sort();classes.forEach(c=>fc.appendChild(heuresEl('option',{value:c},c)));filters.append(heuresEl('span',{},'Période :'),mode,dateF,monthF,yearF,fp,fc);report.appendChild(filters);const out=heuresEl('div');report.appendChild(out);
  function range(){if(mode.value==='mois'){const v=monthF.value;return {start:v+'-01',end:v? v+'-'+String(new Date(+v.slice(0,4),+v.slice(5,7),0).getDate()).padStart(2,'0'):''};}if(mode.value==='annee'){const y=String(yearF.value);return {start:y+'-01-01',end:y+'-12-31'};}const d=new Date((dateF.value||today)+'T12:00:00');d.setDate(d.getDate()-(d.getDay()+6)%7);const start=[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');d.setDate(d.getDate()+6);return {start,end:[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};}
  function redraw(){out.innerHTML='';const rg=range(),all=heuresRecords.filter(r=>r.date&&r.date>=rg.start&&r.date<=rg.end&&(!fp.value||r.profId===fp.value)&&(!fc.value||((r.ecoleNom||r.ecole||'')+' / '+(r.classe||''))===fc.value)),valid=all.filter(r=>r.statut==='validee'),pending=all.filter(r=>r.statut==='a_valider'||!r.statut),sum=a=>a.reduce((n,r)=>n+(Number(r.heures)||0),0),total=sum(valid),pendingTotal=sum(pending);const nprofs=(state.profs||[]).length;const knownClasses=new Set(heuresRecords.map(r=>(r.ecoleNom||r.ecole||'')+' / '+(r.classe||'')).filter(x=>x!==' / '));try{const d=cd();(state.ecoles||[]).forEach(e=>Object.keys((d.classes&&d.classes[e.id])||{}).forEach(k=>{const raw=d.classes[e.id][k],cl=typeof raw==='string'?raw:(raw&&raw.nom)||k;if(cl)knownClasses.add(e.nom+' / '+cl);}));}catch(e){}const nclasses=knownClasses.size;out.appendChild(heuresEl('p',{class:'small'},`Période : ${rg.start} au ${rg.end}. Les totaux principaux incluent uniquement les séances validées. Les séances à vérifier sont séparées et les séances annulées sont exclues.`));const metrics=heuresEl('div',{class:'grid2'});[['Total des heures validées',heuresFmt(total)+' h'],['Heures à vérifier',heuresFmt(pendingTotal)+' h'],['Nombre total de professeurs',String(nprofs)],['Classes recensées (emploi du temps et séances)',String(nclasses)]].forEach(([l,v])=>{const b=heuresEl('div',{class:'card'});b.append(heuresEl('strong',{},l),heuresEl('div',{class:'metric-value'},v));metrics.appendChild(b);});out.appendChild(metrics);
  function summary(title,rows,empty){out.appendChild(heuresEl('h3',{},title));const wrap=heuresEl('div',{class:'table-wrap'}),t=heuresEl('table',{class:'data-table'});t.innerHTML='<thead><tr><th>Nom</th><th>Total validé (h)</th><th>Séances</th></tr></thead>';const body=heuresEl('tbody'),vals=Object.values(rows).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));vals.forEach(x=>{const tr=heuresEl('tr');[x.nom,heuresFmt(x.heures),String(x.seances)].forEach(v=>tr.appendChild(heuresEl('td',{},v)));body.appendChild(tr);});if(!vals.length){const tr=heuresEl('tr');tr.appendChild(heuresEl('td',{colspan:'3'},empty));body.appendChild(tr);}t.appendChild(body);wrap.appendChild(t);out.appendChild(wrap);}
@@ -3244,9 +3256,14 @@ function generateAuto(){
         for(const prof of candidatsProfs){
           if(!prof.dispo[key]) continue;
           if(profBusy(prof.id, jour, cren, b.ecole, b.classe)) continue;
-          const salleLibre = state.salles[b.ecole].filter(s=>!s.exclureAuto).map(s=>s.nom).find(nom=>!salleBusy(b.ecole, nom, jour, cren, b.classe));
-          if(!salleLibre) continue;
-          emploiClasse[key] = {matiere:b.matiere, profId:prof.id, salle:salleLibre};
+          const sallesConfigurees=(state.salles&&state.salles[b.ecole])||[];
+          const sallesEligibles=sallesConfigurees.filter(s=>!s.exclureAuto).map(s=>s.nom);
+          // La gestion des salles est facultative. Si aucune salle n'est activée,
+          // le cours peut être placé sans salle. En revanche, une salle choisie
+          // ne peut jamais être attribuée à deux classes au même créneau.
+          const salleLibre=sallesEligibles.length?sallesEligibles.find(nom=>!salleBusy(b.ecole,nom,jour,cren,b.classe)):undefined;
+          if(sallesEligibles.length && !salleLibre) continue;
+          emploiClasse[key] = {matiere:b.matiere, profId:prof.id, ...(salleLibre?{salle:salleLibre}:{})};
           placees++; aPlacer--;
           break;
         }
