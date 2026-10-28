@@ -2944,8 +2944,9 @@ function openCellEditor(ecole, classe, jour, cren){
   const fil = state.filieres.find(f=>f.id===filId);
   body.innerHTML = `<h3>${classe} — ${jour} ${cren}</h3>
     ${fil?'':'<p class="small" style="color:var(--warn);">Aucune filière associée à cette classe : toutes les matières sont proposées. Associe une filière dans Configuration pour restreindre cette liste.</p>'}
-    <label>Matière${fil?' (limitée à la filière '+fil.code+')':''}</label><select id="mSel"></select>
     <label>Professeur <span class="small">(facultatif, tu peux l'attribuer plus tard)</span></label><select id="pSel"></select>
+    <label>Matière${fil?' (matières de la filière '+fil.code+', adaptées à la classe/année)':''}</label><select id="mSel"></select>
+    <p class="small">Si tu choisis d’abord un professeur, ses matières connues apparaissent en priorité, puis les autres matières de la filière restent disponibles.</p>
     <label>Lieu de cours <span class="small">(facultatif : par défaut, ${esc(ecoleNom(ecole))})</span></label><select id="lieuSel"></select>
     <label>Salle <span class="small">(facultative, selon le lieu choisi)</span></label><select id="sSel"></select>
     <div id="mMsg"></div>
@@ -2956,16 +2957,29 @@ function openCellEditor(ecole, classe, jour, cren){
     </div>`;
   const mSel=body.querySelector('#mSel'), pSel=body.querySelector('#pSel'), sSel=body.querySelector('#sSel'), lieuSel=body.querySelector('#lieuSel');
   const matieresListe = fil ? fil.matieres.map(m=>m.nom) : toutesMatieres();
-  matieresListe.forEach(m=>{ const o=document.createElement('option'); o.value=m; o.textContent=m; mSel.appendChild(o); });
-  if(existing) mSel.value = existing.matiere;
+  function remplirMatieres(profId, valeurAConserver){
+    const profChoisi = state.profs.find(p=>p.id===profId);
+    const matieresProf = profChoisi ? (profChoisi.matieres||[]).filter(m=>matieresListe.includes(m)) : [];
+    const ordonnees = [...new Set([...matieresProf, ...matieresListe])];
+    mSel.innerHTML='';
+    ordonnees.forEach(m=>{ const o=document.createElement('option'); o.value=m; o.textContent=matieresProf.includes(m) ? '★ '+m+' (matière du professeur)' : m; mSel.appendChild(o); });
+    if(valeurAConserver && ordonnees.includes(valeurAConserver)) mSel.value=valeurAConserver;
+    else if(ordonnees.length) mSel.value=ordonnees[0];
+  }
+  remplirMatieres('', existing && existing.matiere);
   function refreshProfs(){
+    const ancienProf = pSel.value;
     pSel.innerHTML='<option value="">— choisir —</option>';
     const besoinAffecte = cd().besoins.find(b=>b.ecole===ecole && b.classe===classe && b.matiere===mSel.value && b.profId);
-    state.profs.filter(p=>(!p.ecoles.length || p.ecoles.includes(ecole))).forEach(p=>{
+    const profsTries = state.profs.filter(p=>(!p.ecoles.length || p.ecoles.includes(ecole))).slice().sort((a,b)=>{
+      const aM=(a.matieres||[]).includes(mSel.value), bM=(b.matieres||[]).includes(mSel.value);
+      return Number(bM)-Number(aM) || a.nom.localeCompare(b.nom,'fr');
+    });
+    profsTries.forEach(p=>{
       const dispoOk = p.dispo && p.dispo[jour+'|'+cren];
       const conflit = profBusy(p.id, jour, cren, ecole, classe);
       let label = p.nom;
-      if(!(p.matieres||[]).includes(mSel.value)) label+=' (matière non renseignée pour ce professeur)';
+      if(!(p.matieres||[]).includes(mSel.value)) label+=' (autre matière)';
       if(besoinAffecte && besoinAffecte.profId===p.id) label+=' ★ affecté à cette matière';
       if(!dispoOk) label+=' (non disponible à cette heure)';
       else if(conflit) label+=` (déjà occupé — ${ecoleNom(conflit.ecole)}/${conflit.classe})`;
@@ -2976,17 +2990,20 @@ function openCellEditor(ecole, classe, jour, cren){
     const oNew=document.createElement('option'); oNew.value='__new__'; oNew.textContent='+ Ajouter un nouveau professeur…';
     pSel.appendChild(oNew);
     if(existing) pSel.value = existing.profId || '';
+    else if(ancienProf && [...pSel.options].some(o=>o.value===ancienProf)) pSel.value=ancienProf;
     else if(besoinAffecte){ const pa=state.profs.find(x=>x.id===besoinAffecte.profId); if(pa && pa.dispo[jour+'|'+cren]) pSel.value = besoinAffecte.profId; }
   }
   pSel.onchange=()=>{
-    if(pSel.value!=='__new__') return;
-    const nom=prompt('Nom du nouveau professeur (sera ajouté avec la matière "'+mSel.value+'" et rattaché à '+ecoleNom(ecole)+') :');
-    if(!nom || !nom.trim()){ pSel.value=''; return; }
-    const np={id:uid(), nom:nom.trim(), age:null, lieuNaissance:'', telephone:'', photo:null, diplome:'', matieres:[mSel.value], ecoles:[ecole], dispo:toutesDispoParDefaut()};
-    state.profs.push(np);
-    save();
-    refreshProfs();
-    pSel.value=np.id;
+    if(pSel.value==='__new__'){
+      const nom=prompt('Nom du nouveau professeur (sera ajouté avec la matière "'+mSel.value+'" et rattaché à '+ecoleNom(ecole)+') :');
+      if(!nom || !nom.trim()){ pSel.value=''; remplirMatieres('',mSel.value); return; }
+      const np={id:uid(), nom:nom.trim(), age:null, lieuNaissance:'', telephone:'', photo:null, diplome:'', matieres:[mSel.value], ecoles:[ecole], dispo:toutesDispoParDefaut()};
+      state.profs.push(np);
+      save();
+      refreshProfs();
+      pSel.value=np.id;
+    }
+    remplirMatieres(pSel.value, mSel.value);
   };
   lieuSel.innerHTML = state.ecoles.map(e=>`<option value="${e.id}">${esc(e.nom)}${e.id===ecole?' (lieu par défaut)':''}</option>`).join('');
   lieuSel.value = (existing && existing.lieuEcoleId) || ecole;
@@ -3003,7 +3020,7 @@ function openCellEditor(ecole, classe, jour, cren){
     sSel.value = ancienneSalle || '';
   }
   lieuSel.onchange=refreshSalles;
-  mSel.onchange=refreshProfs; refreshProfs(); refreshSalles();
+  mSel.onchange=refreshProfs; refreshProfs(); if(existing && existing.profId){ pSel.value=existing.profId; remplirMatieres(existing.profId, existing.matiere); } refreshSalles();
   body.querySelector('#mSave').onclick=()=>{
     const msg=body.querySelector('#mMsg');
     if(!mSel.value){ msg.innerHTML='<div class="msg err">Choisis une matière. Le professeur et la salle sont facultatifs.</div>'; return; }
