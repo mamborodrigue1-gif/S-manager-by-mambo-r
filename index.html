@@ -2963,10 +2963,32 @@ function openCellEditor(ecole, classe, jour, cren){
     const ordonnees = [...new Set([...matieresProf, ...matieresListe])];
     mSel.innerHTML='';
     ordonnees.forEach(m=>{ const o=document.createElement('option'); o.value=m; o.textContent=matieresProf.includes(m) ? '★ '+m+' (matière du professeur)' : m; mSel.appendChild(o); });
+    const addOpt=document.createElement('option'); addOpt.value='__new_matiere__'; addOpt.textContent='+ Ajouter une matière en la tapant…'; mSel.appendChild(addOpt);
     if(valeurAConserver && ordonnees.includes(valeurAConserver)) mSel.value=valeurAConserver;
     else if(ordonnees.length) mSel.value=ordonnees[0];
   }
   remplirMatieres('', existing && existing.matiere);
+  mSel.onchange=()=>{
+    if(mSel.value==='__new_matiere__'){
+      const saisie=prompt('Saisis le nom de la nouvelle matière :');
+      const nom=(saisie||'').trim().replace(/\s+/g,' ');
+      if(!nom){ remplirMatieres(pSel.value, ''); return; }
+      const deja=toutesMatieres().find(m=>m.toLocaleLowerCase('fr')===nom.toLocaleLowerCase('fr'));
+      const matiere=deja||nom;
+      if(!state.matieres.some(m=>m.toLocaleLowerCase('fr')===matiere.toLocaleLowerCase('fr'))) state.matieres.push(matiere);
+      if(fil && !fil.matieres.some(m=>String(m.nom).toLocaleLowerCase('fr')===matiere.toLocaleLowerCase('fr'))) fil.matieres.push({nom:matiere});
+      // Une matière créée dans un créneau est également proposée au professeur choisi.
+      const prof=state.profs.find(p=>p.id===pSel.value);
+      if(prof && !prof.matieres.some(m=>String(m).toLocaleLowerCase('fr')===matiere.toLocaleLowerCase('fr'))) prof.matieres.push(matiere);
+      save();
+      remplirMatieres(pSel.value, matiere);
+      mSel.value=matiere;
+      refreshProfs();
+      if(prof) pSel.value=prof.id;
+    } else {
+      refreshProfs();
+    }
+  };
   function refreshProfs(){
     const ancienProf = pSel.value;
     pSel.innerHTML='<option value="">— choisir —</option>';
@@ -2987,7 +3009,7 @@ function openCellEditor(ecole, classe, jour, cren){
       if(!dispoOk) o.disabled=true;
       pSel.appendChild(o);
     });
-    const oNew=document.createElement('option'); oNew.value='__new__'; oNew.textContent='+ Ajouter un nouveau professeur…';
+    const oNew=document.createElement('option'); oNew.value='__new__'; oNew.textContent='+ Ajouter un professeur en saisissant son nom et ses prénoms…';
     pSel.appendChild(oNew);
     if(existing) pSel.value = existing.profId || '';
     else if(ancienProf && [...pSel.options].some(o=>o.value===ancienProf)) pSel.value=ancienProf;
@@ -2997,11 +3019,16 @@ function openCellEditor(ecole, classe, jour, cren){
     if(pSel.value==='__new__'){
       const nom=prompt('Nom du nouveau professeur (sera ajouté avec la matière "'+mSel.value+'" et rattaché à '+ecoleNom(ecole)+') :');
       if(!nom || !nom.trim()){ pSel.value=''; remplirMatieres('',mSel.value); return; }
-      const np={id:uid(), nom:nom.trim(), age:null, lieuNaissance:'', telephone:'', photo:null, diplome:'', matieres:[mSel.value], ecoles:[ecole], dispo:toutesDispoParDefaut()};
-      state.profs.push(np);
-      save();
-      refreshProfs();
-      pSel.value=np.id;
+      const nomNettoye=nom.trim().replace(/\s+/g,' ');
+      const deja=state.profs.find(p=>p.nom.trim().toLocaleLowerCase('fr')===nomNettoye.toLocaleLowerCase('fr'));
+      if(deja){
+        if(!deja.matieres.some(m=>String(m).toLocaleLowerCase('fr')===mSel.value.toLocaleLowerCase('fr'))) deja.matieres.push(mSel.value);
+        if(!deja.ecoles.includes(ecole)) deja.ecoles.push(ecole);
+        save(); refreshProfs(); pSel.value=deja.id;
+      } else {
+        const np={id:uid(), nom:nomNettoye, age:null, lieuNaissance:'', telephone:'', photo:null, diplome:'', matieres:[mSel.value], ecoles:[ecole], dispo:toutesDispoParDefaut()};
+        state.profs.push(np); save(); refreshProfs(); pSel.value=np.id;
+      }
     }
     remplirMatieres(pSel.value, mSel.value);
   };
@@ -3020,7 +3047,7 @@ function openCellEditor(ecole, classe, jour, cren){
     sSel.value = ancienneSalle || '';
   }
   lieuSel.onchange=refreshSalles;
-  mSel.onchange=refreshProfs; refreshProfs(); if(existing && existing.profId){ pSel.value=existing.profId; remplirMatieres(existing.profId, existing.matiere); } refreshSalles();
+  refreshProfs(); if(existing && existing.profId){ pSel.value=existing.profId; remplirMatieres(existing.profId, existing.matiere); } refreshSalles();
   body.querySelector('#mSave').onclick=()=>{
     const msg=body.querySelector('#mMsg');
     if(!mSel.value){ msg.innerHTML='<div class="msg err">Choisis une matière. Le professeur et la salle sont facultatifs.</div>'; return; }
