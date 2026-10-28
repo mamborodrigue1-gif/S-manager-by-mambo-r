@@ -1329,6 +1329,20 @@ function salleBusy(ecole, salle, jour, cren, excludeClasse){
   }
   return null;
 }
+function salleBusyLieu(lieuEcole, salle, jour, cren, excludeEcole, excludeClasse){
+  if(!salle || !String(salle).trim()) return null;
+  const d=cd(), key=jour+'|'+cren;
+  for(const e of state.ecoles){
+    const classes=d.emploi[e.id]||{};
+    for(const cl in classes){
+      if(e.id===excludeEcole && cl===excludeClasse) continue;
+      const v=classes[cl][key];
+      const lieu=(v && v.lieuEcoleId) || e.id;
+      if(v && lieu===lieuEcole && v.salle===salle) return {ecole:e.id, classe:cl};
+    }
+  }
+  return null;
+}
 function nomsSalles(ecole){ return (state.salles[ecole]||[]).map(s=>s.nom); }
 function toutesMatieres(extra){
   const s=new Set([...state.matieres, ...state.filieres.flatMap(f=>f.matieres.map(m=>m.nom)), ...(extra||[])]);
@@ -2359,7 +2373,7 @@ function computeClasseSheet(ecole, classe){
     ecoleLabel:ecoleNom(ecole), annee:state.anneeActuelle, titre:'EMPLOI DU TEMPS CLASSE', photo:null,
     info:[['Classe',classe],['École',ecoleNom(ecole)],['Filière',fil?fil.code:'—']],
     tables:[{titre:'Professeurs, matières et heures (placées / prévues) — total placé : '+Object.keys(emploi).length+' h', headers:['Matière','Professeur','Téléphone','Heures'], rows:lignes}],
-    cellText:(j,cren)=>{ const v=emploi[j+'|'+cren]; if(!v) return ''; const p=state.profs.find(p=>p.id===v.profId); return (v.matiere+' — '+(p?p.nom:'Professeur non attribué')+' '+(v.salle||'')).trim(); }
+    cellText:(j,cren)=>{ const v=emploi[j+'|'+cren]; if(!v) return ''; const p=state.profs.find(p=>p.id===v.profId); return (v.matiere+' — '+(p?p.nom:'Professeur non attribué')+(((v.lieuEcoleId||ecole)!==ecole)?' — '+ecoleNom(v.lieuEcoleId):'')+' '+(v.salle||'')).trim(); }
   };
 }
 
@@ -2677,9 +2691,11 @@ function renderEDT_prof(app){
 
 // ---------- VALIDATION DES RÈGLES DE GESTION ----------
 // Bloque par défaut ; ne force jamais une action "impossible" sans confirmation explicite de l'utilisateur.
-function attemptSave(ecole, classe, jour, cren, matiere, profId, salle){
+function attemptSave(ecole, classe, jour, cren, matiere, profId, salle, lieuEcoleId){
   const d = cd();
   const key = jour+'|'+cren;
+  lieuEcoleId = lieuEcoleId || ecole;
+  if(!state.ecoles.some(e=>e.id===lieuEcoleId)) lieuEcoleId=ecole;
   const filId = d.classeFiliere[ecole+'|'+classe];
   const fil = state.filieres.find(f=>f.id===filId);
 
@@ -2741,15 +2757,15 @@ function attemptSave(ecole, classe, jour, cren, matiere, profId, salle){
   }
 
   // Une salle ne peut accueillir 2 classes en même temps
-  const conflitSalleClasse = salleBusy(ecole, salle, jour, cren, classe);
-  if(conflitSalleClasse && !overrides.some(o=>o.ecole===ecole && o.classe===conflitSalleClasse)){
-    if(!confirm(`Cette salle est déjà occupée par ${conflitSalleClasse} à cet horaire. Retirer cette heure-là pour libérer la salle ?`)) return false;
-    overrides.push({ecole, classe:conflitSalleClasse});
+  const conflitSalle = salleBusyLieu(lieuEcoleId, salle, jour, cren, ecole, classe);
+  if(conflitSalle && !overrides.some(o=>o.ecole===conflitSalle.ecole && o.classe===conflitSalle.classe)){
+    if(!confirm(`Cette salle est déjà occupée par ${conflitSalle.classe} à ${ecoleNom(conflitSalle.ecole)} à cet horaire. Retirer cette heure-là pour libérer la salle ?`)) return false;
+    overrides.push({ecole:conflitSalle.ecole, classe:conflitSalle.classe});
   }
 
   overrides.forEach(o=>{ if(d.emploi[o.ecole] && d.emploi[o.ecole][o.classe]) delete d.emploi[o.ecole][o.classe][key]; });
   if(!d.emploi[ecole][classe]) d.emploi[ecole][classe]={};
-  d.emploi[ecole][classe][key] = {matiere, profId, salle};
+  d.emploi[ecole][classe][key] = {matiere, profId, salle: salle || null, lieuEcoleId};
   save();
   return true;
 }
@@ -2895,7 +2911,9 @@ function renderEDT_classe(app){
         const v = d.emploi[ecole][classe][key];
         if(v){
           const prof=state.profs.find(p=>p.id===v.profId);
-          rows+=`<td class="cell busy" data-jour="${j}" data-cren="${cren}"><b>${v.matiere}</b>${prof?esc(prof.nom):'<span style="color:var(--warn);font-weight:700;">Professeur non attribué</span>'}<br><span class="small">${v.salle?esc(v.salle):''}</span></td>`;
+          const lieuId=v.lieuEcoleId||ecole;
+          const lieuLabel=lieuId!==ecole?`<br><span class="small">📍 ${esc(ecoleNom(lieuId))}</span>`:'';
+          rows+=`<td class="cell busy" data-jour="${j}" data-cren="${cren}"><b>${v.matiere}</b>${prof?esc(prof.nom):'<span style="color:var(--warn);font-weight:700;">Professeur non attribué</span>'}${lieuLabel}<br><span class="small">${v.salle?esc(v.salle):''}</span></td>`;
         } else {
           rows+=`<td class="cell" data-jour="${j}" data-cren="${cren}"></td>`;
         }
@@ -2928,14 +2946,15 @@ function openCellEditor(ecole, classe, jour, cren){
     ${fil?'':'<p class="small" style="color:var(--warn);">Aucune filière associée à cette classe : toutes les matières sont proposées. Associe une filière dans Configuration pour restreindre cette liste.</p>'}
     <label>Matière${fil?' (limitée à la filière '+fil.code+')':''}</label><select id="mSel"></select>
     <label>Professeur <span class="small">(facultatif, tu peux l'attribuer plus tard)</span></label><select id="pSel"></select>
-    <label>Salle <span class="small">(facultative, laisse « — choisir — » si tu ne veux pas attribuer de salle)</span></label><select id="sSel"></select>
+    <label>Lieu de cours <span class="small">(facultatif : par défaut, ${esc(ecoleNom(ecole))})</span></label><select id="lieuSel"></select>
+    <label>Salle <span class="small">(facultative, selon le lieu choisi)</span></label><select id="sSel"></select>
     <div id="mMsg"></div>
     <div class="row" style="margin-top:12px;">
       <button class="btn" id="mSave">Enregistrer</button>
       ${existing?'<button class="btn danger" id="mDel">Libérer le créneau</button>':''}
       <button class="btn ghost" id="mCancel">Annuler</button>
     </div>`;
-  const mSel=body.querySelector('#mSel'), pSel=body.querySelector('#pSel'), sSel=body.querySelector('#sSel');
+  const mSel=body.querySelector('#mSel'), pSel=body.querySelector('#pSel'), sSel=body.querySelector('#sSel'), lieuSel=body.querySelector('#lieuSel');
   const matieresListe = fil ? fil.matieres.map(m=>m.nom) : toutesMatieres();
   matieresListe.forEach(m=>{ const o=document.createElement('option'); o.value=m; o.textContent=m; mSel.appendChild(o); });
   if(existing) mSel.value = existing.matiere;
@@ -2969,23 +2988,28 @@ function openCellEditor(ecole, classe, jour, cren){
     refreshProfs();
     pSel.value=np.id;
   };
+  lieuSel.innerHTML = state.ecoles.map(e=>`<option value="${e.id}">${esc(e.nom)}${e.id===ecole?' (lieu par défaut)':''}</option>`).join('');
+  lieuSel.value = (existing && existing.lieuEcoleId) || ecole;
   function refreshSalles(){
-    sSel.innerHTML='<option value="">— choisir —</option>';
-    nomsSalles(ecole).forEach(s=>{
-      const occ = salleBusy(ecole, s, jour, cren, classe);
-      const o=document.createElement('option'); o.value=s; o.textContent = occ? `${s} (occupée par ${occ})` : s;
+    const lieu=lieuSel.value || ecole;
+    const ancienneSalle = existing && (existing.lieuEcoleId||ecole)===lieu ? existing.salle : '';
+    sSel.innerHTML='<option value="">— aucune salle —</option>';
+    nomsSalles(lieu).forEach(s=>{
+      const occ = salleBusyLieu(lieu, s, jour, cren, ecole, classe);
+      const o=document.createElement('option'); o.value=s; o.textContent = occ? `${s} (occupée par ${occ.classe} à ${ecoleNom(occ.ecole)})` : s;
       if(occ) o.disabled=true;
       sSel.appendChild(o);
     });
-    if(existing) sSel.value = existing.salle || '';
+    sSel.value = ancienneSalle || '';
   }
+  lieuSel.onchange=refreshSalles;
   mSel.onchange=refreshProfs; refreshProfs(); refreshSalles();
   body.querySelector('#mSave').onclick=()=>{
     const msg=body.querySelector('#mMsg');
     if(!mSel.value){ msg.innerHTML='<div class="msg err">Choisis une matière. Le professeur et la salle sont facultatifs.</div>'; return; }
     const profId = pSel.value && pSel.value!=='__new__' ? pSel.value : null;
     const salle = sSel.value || null;
-    const ok = attemptSave(ecole, classe, jour, cren, mSel.value, profId, salle);
+    const ok = attemptSave(ecole, classe, jour, cren, mSel.value, profId, salle, lieuSel.value || ecole);
     if(!ok) return;
     overlay.classList.remove('show'); window.__drawGrid && window.__drawGrid();
   };
