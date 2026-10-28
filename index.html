@@ -2322,9 +2322,14 @@ function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,
 function heuresPlaceesProf(profId){
   const d=cd(); const res=[];
   state.ecoles.forEach(s=>{
-    const e=d.emploi[s.id]||{};
+    const e=(d.emploi&&d.emploi[s.id])||{};
     Object.keys(e).forEach(cl=>{
-      Object.values(e[cl]).forEach(v=>{ if(v.profId===profId) res.push({ecole:s.id, classe:cl, matiere:v.matiere}); });
+      Object.entries(e[cl]||{}).forEach(([key,v])=>{
+        if(!v || v.profId!==profId) return;
+        // Les heures sont imputées au lieu réel du cours, pas à l'école de rattachement de la classe.
+        const lieuReel=(state.ecoles||[]).find(x=>x.id===(v.lieuEcoleId||s.id));
+        res.push({ecole:(lieuReel&&lieuReel.id)||s.id, ecoleBase:s.id, classe:cl, matiere:v.matiere||'', jour:key.split('|')[0], creneau:key.split('|').slice(1).join('|')});
+      });
     });
   });
   return res;
