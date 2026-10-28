@@ -1318,11 +1318,14 @@ function profBusy(profId, jour, cren, excludeEcole, excludeClasse){
   return null;
 }
 function salleBusy(ecole, salle, jour, cren, excludeClasse){
+  // L'affectation d'une salle est entièrement facultative : une séance sans salle
+  // ne doit jamais créer de conflit avec une autre séance également sans salle.
+  if(salle===null || salle===undefined || String(salle).trim()==='') return null;
   const e = cd().emploi[ecole]||{};
   for(const cl in e){
     if(cl===excludeClasse) continue;
     const v = e[cl][jour+'|'+cren];
-    if(v && v.salle===salle) return cl;
+    if(v && v.salle && v.salle===salle) return cl;
   }
   return null;
 }
@@ -1506,8 +1509,38 @@ function renderConfig(app){
     const rowCl=document.createElement('div'); rowCl.className='row';
     rowCl.innerHTML=`<input type="text" id="newClasse_${s.id}" placeholder="Ex: 6ème A">`;
     const bCl=document.createElement('button'); bCl.className='btn'; bCl.textContent='Ajouter classe';
-    bCl.onclick=()=>{ const v=document.getElementById('newClasse_'+s.id).value.trim(); if(v){classesAnnee[s.id].push(v); save(); renderMain();} };
+    bCl.onclick=()=>{ const v=document.getElementById('newClasse_'+s.id).value.trim(); if(v){ if(classesAnnee[s.id].some(x=>String(x).toLowerCase()===v.toLowerCase())){ alert('Cette classe existe déjà dans cette école.'); return; } classesAnnee[s.id].push(v); save(); renderMain();} };
     rowCl.appendChild(bCl); c.appendChild(rowCl);
+
+    // Permet d'utiliser une classe déjà créée dans une autre école, avec un emploi du temps local distinct.
+    const sharedBox=document.createElement('div'); sharedBox.style.marginTop='12px';
+    const sharedTitle=document.createElement('strong'); sharedTitle.textContent='Utiliser une classe créée dans une autre école'; sharedBox.appendChild(sharedTitle);
+    const sharedHelp=document.createElement('p'); sharedHelp.className='small'; sharedHelp.textContent='Exemple : ajouter 1 FCGE du Général à Marcory ou à l’ISFOP Zone 4. Tu peux placer des cours dans chaque école aux jours et heures de ton choix. Un même créneau ne peut toutefois être attribué qu’à un seul lieu : si tu programmes la classe ailleurs à cette heure, l’ancien cours sera déplacé après confirmation.'; sharedBox.appendChild(sharedHelp);
+    const sharedRow=document.createElement('div'); sharedRow.className='row';
+    const sharedSel=document.createElement('select');
+    const sources=[];
+    state.ecoles.filter(other=>other.id!==s.id).forEach(other=>{
+      (classesAnnee[other.id]||[]).forEach(otherClass=>{
+        const className=String(otherClass);
+        if(!(classesAnnee[s.id]||[]).some(x=>String(x).toLowerCase()===className.toLowerCase())){
+          sources.push({ecole:other,classe:className,key:other.id+'|'+className});
+        }
+      });
+    });
+    sharedSel.innerHTML='<option value="">— Choisir une classe d’une autre école —</option>'+sources.map(x=>`<option value="${x.key.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">${x.classe} — ${x.ecole.nom}</option>`).join('');
+    const addShared=document.createElement('button'); addShared.className='btn secondary'; addShared.textContent='Ajouter cette classe à l’école'; addShared.disabled=!sources.length;
+    addShared.onclick=()=>{
+      const selected=sources.find(x=>x.key===sharedSel.value);
+      if(!selected){alert('Choisis d’abord une classe.');return;}
+      if((classesAnnee[s.id]||[]).some(x=>String(x).toLowerCase()===selected.classe.toLowerCase())){alert('Cette classe existe déjà dans cette école.');return;}
+      classesAnnee[s.id].push(selected.classe);
+      const sourceFiliere=classeFiliereAnnee[selected.key];
+      if(sourceFiliere) classeFiliereAnnee[s.id+'|'+selected.classe]=sourceFiliere;
+      if(!cd().emploi[s.id]) cd().emploi[s.id]={};
+      if(!cd().emploi[s.id][selected.classe]) cd().emploi[s.id][selected.classe]={};
+      save(); renderMain();
+    };
+    sharedRow.append(sharedSel,addShared); sharedBox.appendChild(sharedRow); c.appendChild(sharedBox);
     app.appendChild(c);
   });
 }
@@ -2547,6 +2580,17 @@ function classBusy(ecole, classe, jour, cren){
   const d=cd();
   return !!(d.emploi[ecole] && d.emploi[ecole][classe] && d.emploi[ecole][classe][jour+'|'+cren]);
 }
+// Une classe ajoutée à plusieurs écoles représente le même groupe d'élèves :
+// elle ne peut donc pas être physiquement dans deux écoles au même créneau.
+function sameClassBusyElsewhere(ecole, classe, jour, cren){
+  const d=cd(), key=jour+'|'+cren;
+  for(const s of state.ecoles){
+    if(s.id===ecole) continue;
+    const other=(d.emploi[s.id]||{})[classe];
+    if(other && other[key]) return {ecole:s.id, classe, entry:other[key]};
+  }
+  return null;
+}
 
 function findProfEntry(profId, jour, cren){
   const d=cd();
@@ -2679,6 +2723,14 @@ function attemptSave(ecole, classe, jour, cren, matiere, profId, salle){
         break;
       }
     }
+  }
+
+  // Une classe partagée ne peut pas être dans deux écoles au même créneau.
+  const conflitClasseAutreEcole = sameClassBusyElsewhere(ecole, classe, jour, cren);
+  if(conflitClasseAutreEcole){
+    const v=conflitClasseAutreEcole.entry;
+    if(!confirm(`${classe} est déjà programmée à ${cren} le ${jour} à ${ecoleNom(conflitClasseAutreEcole.ecole)}. Déplacer ce cours vers ${ecoleNom(ecole)} et libérer l'ancien créneau ?`)) return false;
+    overrides.push({ecole:conflitClasseAutreEcole.ecole, classe});
   }
 
   // Le professeur ne peut être à 2 endroits à la fois
@@ -2876,7 +2928,7 @@ function openCellEditor(ecole, classe, jour, cren){
     ${fil?'':'<p class="small" style="color:var(--warn);">Aucune filière associée à cette classe : toutes les matières sont proposées. Associe une filière dans Configuration pour restreindre cette liste.</p>'}
     <label>Matière${fil?' (limitée à la filière '+fil.code+')':''}</label><select id="mSel"></select>
     <label>Professeur <span class="small">(facultatif, tu peux l'attribuer plus tard)</span></label><select id="pSel"></select>
-    <label>Salle <span class="small">(facultatif)</span></label><select id="sSel"></select>
+    <label>Salle <span class="small">(facultative, laisse « — choisir — » si tu ne veux pas attribuer de salle)</span></label><select id="sSel"></select>
     <div id="mMsg"></div>
     <div class="row" style="margin-top:12px;">
       <button class="btn" id="mSave">Enregistrer</button>
@@ -3264,7 +3316,8 @@ function generateAuto(){
       for(const cren of state.creneaux){
         if(aPlacer<=0) break outer;
         const key=jour+'|'+cren;
-        if(emploiClasse[key]) continue; // créneau déjà pris pour cette classe
+        if(emploiClasse[key]) continue; // créneau déjà pris pour cette classe dans cette école
+        if(sameClassBusyElsewhere(b.ecole, b.classe, jour, cren)) continue; // classe partagée déjà dans une autre école
         for(const prof of candidatsProfs){
           if(!prof.dispo[key]) continue;
           if(profBusy(prof.id, jour, cren, b.ecole, b.classe)) continue;
