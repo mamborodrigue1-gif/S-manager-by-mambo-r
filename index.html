@@ -139,7 +139,7 @@ table.grid td.slot{background:var(--bg);padding:6px;font-weight:600;white-space:
     width:100% !important; max-width:none !important; min-width:0 !important;
     box-sizing:border-box !important; margin:0 !important; padding:2mm !important;
     border:0 !important; border-radius:0 !important; box-shadow:none !important;
-    background:#fff !important; background-image:none !important; color:#111 !important;
+    background-color:#fff !important; color:#111 !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;
     overflow:visible !important;
   }
   #printArea .gridwrap { width:100% !important; max-width:none !important; overflow:visible !important; }
@@ -2558,8 +2558,9 @@ function exportExcel(data, filename){
 }
 function captureSheet(el){
   const clone=el.cloneNode(true);
-  clone.style.backgroundImage='none';
-  clone.style.backgroundColor='#ffffff';
+  clone.style.backgroundImage='';
+  clone.style.backgroundColor='';
+  applySheetWallpaper(clone);
   clone.classList.add('capturing');
   const foot=clone.querySelector('.sh-foot'); if(foot) foot.textContent='Smanagerbymambo · Exporté le '+stampNow();
   clone.style.position='fixed'; clone.style.left='-99999px'; clone.style.top='0'; clone.style.width='max-content'; clone.style.minWidth='1100px'; clone.style.maxWidth='none'; clone.style.boxSizing='border-box';
@@ -2609,8 +2610,9 @@ function printSheet(sheetEl){
   const old=document.getElementById('printArea'); if(old) old.remove();
   const area=document.createElement('div'); area.id='printArea';
   const clone=sheetEl.cloneNode(true);
-  clone.style.backgroundImage='none';
-  clone.style.backgroundColor='#ffffff';
+  clone.style.backgroundImage='';
+  clone.style.backgroundColor='';
+  applySheetWallpaper(clone);
   clone.style.color='#111111';
   const foot=clone.querySelector('.sh-foot'); if(foot) foot.textContent='Smanagerbymambo · Imprimé le '+stampNow();
   area.appendChild(clone);
