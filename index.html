@@ -98,7 +98,7 @@ table{border-collapse:collapse;width:100%;font-size:12px;}
 table.grid td,table.grid th{border:1px solid var(--line);padding:0;text-align:center;}
 table.grid th{background:var(--bg);padding:6px 4px;font-weight:600;}
 table.grid td.slot{background:var(--bg);padding:6px;font-weight:600;white-space:nowrap;}
-.cell{min-width:90px;height:52px;padding:3px;cursor:pointer;font-size:11px;line-height:1.3;}
+.cell{min-width:90px;height:52px;padding:3px;cursor:pointer;font-size:12px;line-height:1.3;}
 .cell:hover{outline:2px solid var(--accent);outline-offset:-2px;}
 .cell.busy{background:#eaf1ff;}
 :root[data-theme="dark"] .cell.busy, @media (prefers-color-scheme:dark){.cell.busy{background:#1f2a44;}}
@@ -146,14 +146,14 @@ table.grid td.slot{background:var(--bg);padding:6px;font-weight:600;white-space:
   #printArea table.grid { width:100% !important; min-width:0 !important; max-width:none !important; table-layout:fixed !important; }
   #printArea table.grid th, #printArea table.grid td {
     min-width:0 !important; max-width:none !important; padding:1.5px !important;
-    font-size:6.5pt !important; line-height:1.08 !important;
+    font-size:7.5pt !important; line-height:1.12 !important;
     overflow-wrap:anywhere !important; word-break:break-word !important;
   }
   #printArea table.grid td.slot, #printArea table.grid th { white-space:normal !important; }
-  #printArea .edt-sheet .cell { min-width:0 !important; height:auto !important; min-height:25px !important; padding:1px !important; font-size:6pt !important; line-height:1.05 !important; }
-  #printArea .edt-sheet .cell b { font-size:6pt !important; }
-  #printArea .edt-sheet table.recap { width:100% !important; table-layout:fixed !important; font-size:7pt !important; }
-  #printArea .edt-sheet table.recap th, #printArea .edt-sheet table.recap td { padding:2px !important; font-size:7pt !important; overflow-wrap:anywhere !important; }
+  #printArea .edt-sheet .cell { min-width:0 !important; height:auto !important; min-height:25px !important; padding:1px !important; font-size:7pt !important; line-height:1.1 !important; }
+  #printArea .edt-sheet .cell b { font-size:7.2pt !important; }
+  #printArea .edt-sheet table.recap { width:100% !important; table-layout:fixed !important; font-size:8pt !important; }
+  #printArea .edt-sheet table.recap th, #printArea .edt-sheet table.recap td { padding:2.5px !important; font-size:8pt !important; overflow-wrap:anywhere !important; }
   #printArea .edt-sheet tr { break-inside:avoid !important; page-break-inside:avoid !important; }
   #printArea .edt-sheet .sh-foot { display:block !important; }
 }
