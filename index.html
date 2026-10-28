@@ -2055,7 +2055,7 @@ function renderGestionHeures(app){
  // Ces lignes sont calculées depuis l'emploi du temps, sans créer de doublons dans Firestore.
  const planningRecords=[];try{const d=cd(),startDate=new Date((rg.start||today)+'T12:00:00'),endDate=new Date((rg.end||today)+'T12:00:00'),dayNames=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
  for(let dt=new Date(startDate);dt<=endDate;dt.setDate(dt.getDate()+1)){const day=dayNames[dt.getDay()],dateStr=[dt.getFullYear(),String(dt.getMonth()+1).padStart(2,'0'),String(dt.getDate()).padStart(2,'0')].join('-');
- (state.ecoles||[]).forEach(e=>Object.entries((d.emploi&&d.emploi[e.id])||{}).forEach(([cl,slots])=>Object.entries(slots||{}).forEach(([key,v])=>{const parts=key.split('|');if(parts[0]!==day||!v||!v.profId)return;const prof=(state.profs||[]).find(p=>p.id===v.profId);if(!prof)return;const cr=parts.slice(1).join('|');const h=1;const lieu=(state.ecoles||[]).find(x=>x.id===(v.lieuEcoleId||e.id))||e;planningRecords.push({id:'planning_'+dateStr+'_'+e.id+'_'+cl+'_'+key,autoPlanning:true,date:dateStr,mois:dateStr.slice(0,7),profId:v.profId,profNom:prof.nom,ecole:e.id,ecoleNom:lieu.nom,classe:cl,matiere:v.matiere||'',heures:h,typeSeance:'cours',statut:'validee',observation:'Créneau issu de l’emploi du temps, validé par défaut'});})));}}
+ (state.ecoles||[]).forEach(e=>Object.entries((d.emploi&&d.emploi[e.id])||{}).forEach(([cl,slots])=>Object.entries(slots||{}).forEach(([key,v])=>{const parts=key.split('|');if(parts[0]!==day||!v||!v.profId)return;const prof=(state.profs||[]).find(p=>p.id===v.profId);if(!prof)return;const cr=parts.slice(1).join('|');const h=1;const lieu=(state.ecoles||[]).find(x=>x.id===(v.lieuEcoleId||e.id))||e;planningRecords.push({id:'planning_'+dateStr+'_'+e.id+'_'+cl+'_'+key,autoPlanning:true,date:dateStr,mois:dateStr.slice(0,7),profId:v.profId,profNom:prof.nom,ecole:lieu.id,ecoleNom:lieu.nom,ecoleBaseId:e.id,ecoleBaseNom:e.nom,classe:cl,matiere:v.matiere||'',heures:h,typeSeance:'cours',statut:'validee',observation:'Créneau issu de l’emploi du temps, validé par défaut'});})));}}
  catch(err){console.warn('Lecture du planning pour le bilan des heures impossible',err);}
  const manual=heuresRecords.filter(r=>r.date&&r.date>=rg.start&&r.date<=rg.end);
  const all=[...planningRecords,...manual].filter(r=>(!fp.value||r.profId===fp.value)&&(!fc.value||((r.ecoleNom||r.ecole||'')+' / '+(r.classe||''))===fc.value)),valid=all.filter(r=>r.statut==='validee'||r.autoPlanning),pending=all.filter(r=>!r.autoPlanning&&(r.statut==='a_valider'||!r.statut)),sum=a=>a.reduce((n,r)=>n+(Number(r.heures)||0),0),total=sum(valid),pendingTotal=sum(pending);const nprofs=(state.profs||[]).length;const knownClasses=new Set(heuresRecords.map(r=>(r.ecoleNom||r.ecole||'')+' / '+(r.classe||'')).filter(x=>x!==' / '));try{const d=cd();(state.ecoles||[]).forEach(e=>Object.keys((d.classes&&d.classes[e.id])||{}).forEach(k=>{const raw=d.classes[e.id][k],cl=typeof raw==='string'?raw:(raw&&raw.nom)||k;if(cl)knownClasses.add(e.nom+' / '+cl);}));}catch(e){}const nclasses=knownClasses.size;out.appendChild(heuresEl('p',{class:'small'},`Période : ${rg.start} au ${rg.end}. Chaque créneau de l’emploi du temps compte pour 1 heure, validée par défaut et comptée automatiquement. Les heures ajoutées manuellement à vérifier sont séparées ; les séances annulées sont exclues.`));const metrics=heuresEl('div',{class:'grid2'});[['Total des heures validées',heuresFmt(total)+' h'],['Heures à vérifier',heuresFmt(pendingTotal)+' h'],['Nombre total de professeurs',String(nprofs)],['Classes recensées (emploi du temps et séances)',String(nclasses)]].forEach(([l,v])=>{const b=heuresEl('div',{class:'card'});b.append(heuresEl('strong',{},l),heuresEl('div',{class:'metric-value'},v));metrics.appendChild(b);});out.appendChild(metrics);
@@ -2351,7 +2351,7 @@ function computeProfSheet(profId){
       {titre:'Récapitulatif des heures (total : '+placees.length+' h)', headers:['Matière','Heures'], rows:Object.entries(parMatiere).map(([m,h])=>[m,h])},
       {titre:'Récapitulatif des classes', headers:['Classe','École','Matière(s)','Heures'], rows:Object.values(parClasse).map(c=>[c.classe, ecoleNom(c.ecole), Object.entries(c.mats).map(([m,h])=>m+' ('+h+'h)').join(', '), c.h])}
     ],
-    cellText:(j,cren)=>{ const e=findProfEntry(profId,j,cren); return e?(e.matiere+' — '+e.classe+' ('+ecoleNom(e.ecole)+') '+(e.salle||'')).trim():''; }
+    cellText:(j,cren)=>{ const e=findProfEntry(profId,j,cren); if(!e)return ''; const lieu=(e.lieuEcoleId||e.ecole)!==e.ecole?' — Lieu de cours : '+ecoleNom(e.lieuEcoleId):''; return (e.matiere+' — '+e.classe+' ('+ecoleNom(e.ecole)+')'+lieu+' — Salle : '+(e.salle||'non attribuée')).trim(); }
   };
 }
 
@@ -2620,7 +2620,7 @@ function findProfEntry(profId, jour, cren){
     const e = d.emploi[s.id]||{};
     for(const cl in e){
       const v = e[cl][jour+'|'+cren];
-      if(v && v.profId===profId) return {ecole:s.id, classe:cl, matiere:v.matiere, salle:v.salle};
+      if(v && v.profId===profId) return {ecole:s.id, lieuEcoleId:v.lieuEcoleId||s.id, classe:cl, matiere:v.matiere, salle:v.salle};
     }
   }
   return null;
@@ -2659,7 +2659,9 @@ function renderEDT_prof(app){
       state.creneaux.forEach(cren=>{
         const entry = findProfEntry(profId, j, cren);
         if(entry){
-          rows+=`<td class="cell busy" data-jour="${j}" data-cren="${cren}"><b>${entry.matiere}</b>${entry.classe} (${ecoleNom(entry.ecole)})<br><span class="small">${entry.salle||''}</span></td>`;
+          const lieuNom=ecoleNom(entry.lieuEcoleId||entry.ecole);
+          const lieuLabel=(entry.lieuEcoleId||entry.ecole)!==entry.ecole?`<br><span class="small">📍 Lieu de cours : ${esc(lieuNom)}</span>`:'';
+          rows+=`<td class="cell busy" data-jour="${j}" data-cren="${cren}"><b>${esc(entry.matiere)}</b><br>${esc(entry.classe)} (${esc(ecoleNom(entry.ecole))})${lieuLabel}<br><span class="small">${esc(entry.salle||'')}</span></td>`;
         } else {
           const dispoOk = prof.dispo[j+'|'+cren];
           rows+=`<td class="cell ${dispoOk?'ok':'ko'}" data-jour="${j}" data-cren="${cren}"></td>`;
