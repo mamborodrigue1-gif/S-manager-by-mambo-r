@@ -193,6 +193,25 @@ table.grid td.slot{background:var(--bg);padding:6px;font-weight:600;white-space:
 }
 
 </style>
+<style>
+/* Version lisibilite maximale : page A4 paysage exploitee sur toute la largeur */
+@media print {
+  @page { size: A4 landscape; margin: 0; }
+  html, body { margin:0 !important; padding:0 !important; width:297mm !important; background:#fff !important; }
+  body.printing #printArea { display:block !important; width:297mm !important; max-width:none !important; margin:0 !important; padding:0 !important; }
+  #printArea .edt-sheet { width:297mm !important; max-width:none !important; min-width:0 !important; min-height:210mm !important; margin:0 !important; padding:3mm !important; box-sizing:border-box !important; }
+  #printArea .gridwrap { width:100% !important; max-width:none !important; margin:0 !important; padding:0 !important; overflow:visible !important; }
+  #printArea table.grid { width:100% !important; min-width:0 !important; max-width:none !important; table-layout:fixed !important; }
+  #printArea table.grid th, #printArea table.grid td { color:#000 !important; font-size:16px !important; font-weight:900 !important; line-height:1.12 !important; padding:3px 2px !important; border:1px solid #000 !important; overflow-wrap:anywhere !important; word-break:normal !important; }
+  #printArea .edt-sheet .cell, #printArea .edt-sheet .cell * { color:#000 !important; -webkit-text-fill-color:#000 !important; font-size:16px !important; font-weight:900 !important; line-height:1.12 !important; text-shadow:none !important; opacity:1 !important; }
+  #printArea .edt-sheet .cell { min-width:0 !important; height:auto !important; min-height:34px !important; padding:3px 2px !important; }
+  #printArea .edt-sheet .cell b, #printArea .edt-sheet .cell strong { font-size:16px !important; font-weight:900 !important; }
+  #printArea .edt-sheet table.recap { width:100% !important; table-layout:fixed !important; font-size:14px !important; }
+  #printArea .edt-sheet table.recap th, #printArea .edt-sheet table.recap td { color:#000 !important; font-size:14px !important; font-weight:900 !important; line-height:1.12 !important; padding:3px !important; border:1px solid #000 !important; overflow-wrap:anywhere !important; }
+  #printArea .edt-sheet tr { break-inside:avoid !important; page-break-inside:avoid !important; }
+}
+
+</style>
 </head>
 <body>
 <header>
@@ -2596,13 +2615,27 @@ function captureSheet(el){
   clone.style.backgroundColor='';
   applySheetWallpaper(clone);
   clone.classList.add('capturing');
+  const exportStyle=document.createElement('style');
+  exportStyle.textContent=`
+    .edt-sheet.capturing { width: 1600px !important; min-width:1600px !important; max-width:none !important; box-sizing:border-box !important; padding:12px !important; border:2px solid #000 !important; border-radius:0 !important; background:#fff !important; color:#000 !important; }
+    .edt-sheet.capturing .sh-head { color:#000 !important; font-size:20px !important; font-weight:900 !important; }
+    .edt-sheet.capturing .sh-title { color:#000 !important; font-size:24px !important; font-weight:900 !important; }
+    .edt-sheet.capturing .sh-info { color:#000 !important; font-size:18px !important; line-height:1.25 !important; }
+    .edt-sheet.capturing .gridwrap { width:100% !important; max-width:none !important; overflow:visible !important; margin:0 !important; padding:0 !important; }
+    .edt-sheet.capturing table.grid { width:100% !important; min-width:0 !important; max-width:none !important; table-layout:fixed !important; border-collapse:collapse !important; }
+    .edt-sheet.capturing table.grid th, .edt-sheet.capturing table.grid td { color:#000 !important; font-size:20px !important; font-weight:900 !important; line-height:1.15 !important; padding:5px 3px !important; border:2px solid #000 !important; overflow-wrap:anywhere !important; }
+    .edt-sheet.capturing .cell, .edt-sheet.capturing .cell * { color:#000 !important; -webkit-text-fill-color:#000 !important; font-size:20px !important; font-weight:900 !important; line-height:1.15 !important; text-shadow:none !important; opacity:1 !important; }
+    .edt-sheet.capturing .cell { height:auto !important; min-height:44px !important; min-width:0 !important; padding:5px 3px !important; }
+    .edt-sheet.capturing table.recap { width:100% !important; table-layout:fixed !important; font-size:18px !important; border-collapse:collapse !important; }
+    .edt-sheet.capturing table.recap th, .edt-sheet.capturing table.recap td { color:#000 !important; font-size:18px !important; font-weight:900 !important; padding:5px !important; border:2px solid #000 !important; overflow-wrap:anywhere !important; }
+    .edt-sheet.capturing .sh-foot { display:block !important; color:#000 !important; font-size:15px !important; font-weight:700 !important; }
+  `;
+  clone.appendChild(exportStyle);
   const foot=clone.querySelector('.sh-foot'); if(foot) foot.textContent='Smanagerbymambo · Exporté le '+stampNow();
-  clone.style.position='fixed'; clone.style.left='-99999px'; clone.style.top='0'; clone.style.width='max-content'; clone.style.minWidth='1100px'; clone.style.maxWidth='none'; clone.style.boxSizing='border-box';
-  clone.querySelectorAll('.gridwrap').forEach(w=>{ w.style.overflow='visible'; w.style.width='max-content'; w.style.maxWidth='none'; });
-  clone.querySelectorAll('table.grid').forEach(t=>{ t.style.width='max-content'; t.style.tableLayout='auto'; });
+  clone.style.position='fixed'; clone.style.left='-99999px'; clone.style.top='0'; clone.style.width='1600px'; clone.style.minWidth='1600px'; clone.style.maxWidth='none'; clone.style.boxSizing='border-box';
+  clone.querySelectorAll('.gridwrap').forEach(w=>{ w.style.overflow='visible'; w.style.width='100%'; w.style.maxWidth='none'; });
+  clone.querySelectorAll('table.grid').forEach(t=>{ t.style.width='100%'; t.style.minWidth='0'; t.style.tableLayout='fixed'; });
   document.body.appendChild(clone);
-  // Mesure la largeur réelle de la grille pour éviter de couper les colonnes de droite.
-  requestAnimationFrame(()=>{ const t=clone.querySelector('table.grid'); if(t){ const w=Math.ceil(t.scrollWidth+32); clone.style.width=w+'px'; clone.style.minWidth=w+'px'; } });
   return new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))
     .then(()=>ensureLib('html2canvas'))
     .then(()=>html2canvas(clone,{backgroundColor:'#ffffff', scale:2, windowWidth:Math.max(clone.scrollWidth,1100)}))
@@ -3706,21 +3739,3 @@ wallpaperObserver.observe(document.body,{childList:true,subtree:true});
 </script>
 </body>
 </html>
-
-
-/* Version lisibilite maximale : page A4 paysage exploitee sur toute la largeur */
-@media print {
-  @page { size: A4 landscape; margin: 0; }
-  html, body { margin:0 !important; padding:0 !important; width:297mm !important; background:#fff !important; }
-  body.printing #printArea { display:block !important; width:297mm !important; max-width:none !important; margin:0 !important; padding:0 !important; }
-  #printArea .edt-sheet { width:297mm !important; max-width:none !important; min-width:0 !important; min-height:210mm !important; margin:0 !important; padding:3mm !important; box-sizing:border-box !important; }
-  #printArea .gridwrap { width:100% !important; max-width:none !important; margin:0 !important; padding:0 !important; overflow:visible !important; }
-  #printArea table.grid { width:100% !important; min-width:0 !important; max-width:none !important; table-layout:fixed !important; }
-  #printArea table.grid th, #printArea table.grid td { color:#000 !important; font-size:16px !important; font-weight:900 !important; line-height:1.12 !important; padding:3px 2px !important; border:1px solid #000 !important; overflow-wrap:anywhere !important; word-break:normal !important; }
-  #printArea .edt-sheet .cell, #printArea .edt-sheet .cell * { color:#000 !important; -webkit-text-fill-color:#000 !important; font-size:16px !important; font-weight:900 !important; line-height:1.12 !important; text-shadow:none !important; opacity:1 !important; }
-  #printArea .edt-sheet .cell { min-width:0 !important; height:auto !important; min-height:34px !important; padding:3px 2px !important; }
-  #printArea .edt-sheet .cell b, #printArea .edt-sheet .cell strong { font-size:16px !important; font-weight:900 !important; }
-  #printArea .edt-sheet table.recap { width:100% !important; table-layout:fixed !important; font-size:14px !important; }
-  #printArea .edt-sheet table.recap th, #printArea .edt-sheet table.recap td { color:#000 !important; font-size:14px !important; font-weight:900 !important; line-height:1.12 !important; padding:3px !important; border:1px solid #000 !important; overflow-wrap:anywhere !important; }
-  #printArea .edt-sheet tr { break-inside:avoid !important; page-break-inside:avoid !important; }
-}
