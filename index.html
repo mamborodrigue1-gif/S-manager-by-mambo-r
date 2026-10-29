@@ -3706,3 +3706,21 @@ wallpaperObserver.observe(document.body,{childList:true,subtree:true});
 </script>
 </body>
 </html>
+
+
+/* Version lisibilite maximale : page A4 paysage exploitee sur toute la largeur */
+@media print {
+  @page { size: A4 landscape; margin: 0; }
+  html, body { margin:0 !important; padding:0 !important; width:297mm !important; background:#fff !important; }
+  body.printing #printArea { display:block !important; width:297mm !important; max-width:none !important; margin:0 !important; padding:0 !important; }
+  #printArea .edt-sheet { width:297mm !important; max-width:none !important; min-width:0 !important; min-height:210mm !important; margin:0 !important; padding:3mm !important; box-sizing:border-box !important; }
+  #printArea .gridwrap { width:100% !important; max-width:none !important; margin:0 !important; padding:0 !important; overflow:visible !important; }
+  #printArea table.grid { width:100% !important; min-width:0 !important; max-width:none !important; table-layout:fixed !important; }
+  #printArea table.grid th, #printArea table.grid td { color:#000 !important; font-size:16px !important; font-weight:900 !important; line-height:1.12 !important; padding:3px 2px !important; border:1px solid #000 !important; overflow-wrap:anywhere !important; word-break:normal !important; }
+  #printArea .edt-sheet .cell, #printArea .edt-sheet .cell * { color:#000 !important; -webkit-text-fill-color:#000 !important; font-size:16px !important; font-weight:900 !important; line-height:1.12 !important; text-shadow:none !important; opacity:1 !important; }
+  #printArea .edt-sheet .cell { min-width:0 !important; height:auto !important; min-height:34px !important; padding:3px 2px !important; }
+  #printArea .edt-sheet .cell b, #printArea .edt-sheet .cell strong { font-size:16px !important; font-weight:900 !important; }
+  #printArea .edt-sheet table.recap { width:100% !important; table-layout:fixed !important; font-size:14px !important; }
+  #printArea .edt-sheet table.recap th, #printArea .edt-sheet table.recap td { color:#000 !important; font-size:14px !important; font-weight:900 !important; line-height:1.12 !important; padding:3px !important; border:1px solid #000 !important; overflow-wrap:anywhere !important; }
+  #printArea .edt-sheet tr { break-inside:avoid !important; page-break-inside:avoid !important; }
+}
