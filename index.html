@@ -2617,20 +2617,20 @@ function captureSheet(el){
   clone.classList.add('capturing');
   const exportStyle=document.createElement('style');
   exportStyle.textContent=`
-    .edt-sheet.capturing { width: 1100px !important; min-width:1100px !important; max-width:none !important; box-sizing:border-box !important; padding:12px !important; border:2px solid #000 !important; border-radius:0 !important; background:#fff !important; color:#000 !important; }
-    .edt-sheet.capturing .sh-head { color:#000 !important; font-size:22px !important; font-weight:900 !important; }
-    .edt-sheet.capturing .sh-title { color:#000 !important; font-size:26px !important; font-weight:900 !important; }
-    .edt-sheet.capturing .sh-info { color:#000 !important; font-size:18px !important; line-height:1.25 !important; }
+    .edt-sheet.capturing { width:1100px !important; min-width:1100px !important; max-width:none !important; box-sizing:border-box !important; padding:6px !important; border:1px solid #000 !important; border-radius:0 !important; background:#fff !important; color:#000 !important; }
+    .edt-sheet.capturing .sh-head { color:#000 !important; font-size:15px !important; font-weight:900 !important; }
+    .edt-sheet.capturing .sh-title { color:#000 !important; font-size:18px !important; font-weight:900 !important; line-height:1.05 !important; margin:2px 0 !important; }
+    .edt-sheet.capturing .sh-info { color:#000 !important; font-size:12px !important; line-height:1.05 !important; }
     .edt-sheet.capturing .gridwrap { width:100% !important; max-width:none !important; overflow:visible !important; margin:0 !important; padding:0 !important; }
     .edt-sheet.capturing table.grid { width:100% !important; min-width:0 !important; max-width:none !important; table-layout:fixed !important; border-collapse:collapse !important; }
-    .edt-sheet.capturing table.grid th, .edt-sheet.capturing table.grid td { color:#000 !important; font-size:20px !important; font-weight:900 !important; line-height:1.15 !important; padding:5px 3px !important; border:2px solid #000 !important; overflow-wrap:anywhere !important; }
-    .edt-sheet.capturing .cell, .edt-sheet.capturing .cell * { color:#000 !important; -webkit-text-fill-color:#000 !important; font-size:20px !important; font-weight:900 !important; line-height:1.15 !important; text-shadow:none !important; opacity:1 !important; }
-    .edt-sheet.capturing .cell { height:auto !important; min-height:44px !important; min-width:0 !important; padding:5px 3px !important; }
-    .edt-sheet.capturing table.recap { width:100% !important; table-layout:fixed !important; font-size:18px !important; border-collapse:collapse !important; }
-    .edt-sheet.capturing table.recap th, .edt-sheet.capturing table.recap td { color:#000 !important; font-size:18px !important; font-weight:900 !important; padding:5px !important; border:2px solid #000 !important; overflow-wrap:anywhere !important; }
-    .edt-sheet.capturing .sh-foot { display:block !important; color:#000 !important; font-size:15px !important; font-weight:700 !important; }
+    .edt-sheet.capturing table.grid th, .edt-sheet.capturing table.grid td { color:#000 !important; font-size:14px !important; font-weight:900 !important; line-height:1.02 !important; padding:2px 2px !important; border:1px solid #000 !important; overflow-wrap:anywhere !important; }
+    .edt-sheet.capturing .cell, .edt-sheet.capturing .cell * { color:#000 !important; -webkit-text-fill-color:#000 !important; font-size:14px !important; font-weight:900 !important; line-height:1.02 !important; text-shadow:none !important; opacity:1 !important; }
+    .edt-sheet.capturing .cell { height:auto !important; min-height:0 !important; min-width:0 !important; padding:2px !important; }
+    .edt-sheet.capturing table.recap { width:100% !important; table-layout:fixed !important; font-size:12px !important; border-collapse:collapse !important; }
+    .edt-sheet.capturing table.recap th, .edt-sheet.capturing table.recap td { color:#000 !important; font-size:12px !important; font-weight:900 !important; padding:2px !important; border:1px solid #000 !important; overflow-wrap:anywhere !important; }
+    .edt-sheet.capturing .sh-foot { display:block !important; color:#000 !important; font-size:9px !important; font-weight:700 !important; }
     .edt-sheet.capturing { width:1100px !important; min-width:1100px !important; max-width:none !important; }
-    .edt-sheet.capturing table.grid th, .edt-sheet.capturing table.grid td, .edt-sheet.capturing .cell, .edt-sheet.capturing .cell * { font-size:20px !important; font-weight:900 !important; }
+    .edt-sheet.capturing table.grid th, .edt-sheet.capturing table.grid td, .edt-sheet.capturing .cell, .edt-sheet.capturing .cell * { font-size:14px !important; font-weight:900 !important; }
   `;
   clone.appendChild(exportStyle);
   const foot=clone.querySelector('.sh-foot'); if(foot) foot.textContent='Smanagerbymambo · Exporté le '+stampNow();
@@ -2644,11 +2644,16 @@ function captureSheet(el){
     .then(c=>{ clone.remove(); return c; }, err=>{ clone.remove(); throw err; });
 }
 function exportImage(el, filename){
-  captureSheet(el).then(canvas=>{
-    const link=document.createElement('a');
-    link.download=safeName(filename)+'.jpg';
-    link.href=canvas.toDataURL('image/jpeg', 0.92);
-    link.click();
+  captureSheet(el).then(source=>{
+    // JPEG au format d’une feuille A4 paysage, avec tout le contenu sur une seule image.
+    const out=document.createElement('canvas');
+    out.width=3508; out.height=2480;
+    const ctx=out.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,out.width,out.height);
+    const pad=28, scale=Math.min((out.width-pad*2)/source.width,(out.height-pad*2)/source.height);
+    const w=source.width*scale, h=source.height*scale;
+    ctx.drawImage(source,(out.width-w)/2,(out.height-h)/2,w,h);
+    const link=document.createElement('a'); link.download=safeName(filename)+'.jpg';
+    link.href=out.toDataURL('image/jpeg',0.94); link.click();
   }).catch(()=>alert("Export en image impossible (bibliothèque non chargée ?)."));
 }
 function exportPdf(el, filename){
@@ -2657,29 +2662,11 @@ function exportPdf(el, filename){
     const pdf=new jsPDF({orientation:'landscape', unit:'pt', format:'a4', compress:true});
     const pageW=pdf.internal.pageSize.getWidth(), pageH=pdf.internal.pageSize.getHeight();
     const margin=4, usableW=pageW-margin*2, usableH=pageH-margin*2;
-    // Conserver toute la grille et limiter strictement le PDF à 1 ou 2 pages.
-    // On utilise d'abord toute la largeur A4; si la hauteur dépasse deux pages,
-    // on réduit proportionnellement l'image pour que rien ne soit coupé.
-    const scaleW=usableW/canvas.width;
-    const scaleMaxTwoPages=(usableH*2)/canvas.height;
-    const scale=Math.min(scaleW, scaleMaxTwoPages);
-    const totalH=canvas.height*scale;
-    const pageCount=Math.max(1, Math.min(2, Math.ceil(totalH/usableH)));
-    const renderW=canvas.width*scale;
-    for(let page=0; page<pageCount; page++){
-      if(page>0) pdf.addPage('a4','landscape');
-      const sourceY=page*usableH/scale;
-      const sourceH=Math.min(usableH/scale, canvas.height-sourceY);
-      if(sourceH<=0) break;
-      const part=document.createElement('canvas');
-      part.width=canvas.width;
-      part.height=Math.max(1,Math.ceil(sourceH));
-      part.getContext('2d').drawImage(canvas,0,sourceY,canvas.width,sourceH,0,0,part.width,part.height);
-      const drawH=part.height*scale;
-      // Centrer horizontalement si une hauteur extrême impose une réduction supplémentaire.
-      const x=margin+(usableW-renderW)/2;
-      pdf.addImage(part.toDataURL('image/jpeg',0.94),'JPEG',x,margin,renderW,drawH,undefined,'FAST');
-    }
+    // Une seule page obligatoire : réduire proportionnellement toute la grille pour qu’elle tienne sur A4 paysage.
+    const scale=Math.min(usableW/canvas.width, usableH/canvas.height);
+    const renderW=canvas.width*scale, renderH=canvas.height*scale;
+    const x=margin+(usableW-renderW)/2, y=margin+(usableH-renderH)/2;
+    pdf.addImage(canvas.toDataURL('image/jpeg',0.94),'JPEG',x,y,renderW,renderH,undefined,'FAST');
     pdf.save(safeName(filename)+'.pdf');
   })).catch(()=>alert("Export PDF impossible (bibliothèque non chargée ?)."));
 }
