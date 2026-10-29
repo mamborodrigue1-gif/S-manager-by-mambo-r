@@ -2617,9 +2617,9 @@ function captureSheet(el){
   clone.classList.add('capturing');
   const exportStyle=document.createElement('style');
   exportStyle.textContent=`
-    .edt-sheet.capturing { width: 1600px !important; min-width:1600px !important; max-width:none !important; box-sizing:border-box !important; padding:12px !important; border:2px solid #000 !important; border-radius:0 !important; background:#fff !important; color:#000 !important; }
-    .edt-sheet.capturing .sh-head { color:#000 !important; font-size:20px !important; font-weight:900 !important; }
-    .edt-sheet.capturing .sh-title { color:#000 !important; font-size:24px !important; font-weight:900 !important; }
+    .edt-sheet.capturing { width: 1100px !important; min-width:1100px !important; max-width:none !important; box-sizing:border-box !important; padding:12px !important; border:2px solid #000 !important; border-radius:0 !important; background:#fff !important; color:#000 !important; }
+    .edt-sheet.capturing .sh-head { color:#000 !important; font-size:22px !important; font-weight:900 !important; }
+    .edt-sheet.capturing .sh-title { color:#000 !important; font-size:26px !important; font-weight:900 !important; }
     .edt-sheet.capturing .sh-info { color:#000 !important; font-size:18px !important; line-height:1.25 !important; }
     .edt-sheet.capturing .gridwrap { width:100% !important; max-width:none !important; overflow:visible !important; margin:0 !important; padding:0 !important; }
     .edt-sheet.capturing table.grid { width:100% !important; min-width:0 !important; max-width:none !important; table-layout:fixed !important; border-collapse:collapse !important; }
@@ -2629,10 +2629,12 @@ function captureSheet(el){
     .edt-sheet.capturing table.recap { width:100% !important; table-layout:fixed !important; font-size:18px !important; border-collapse:collapse !important; }
     .edt-sheet.capturing table.recap th, .edt-sheet.capturing table.recap td { color:#000 !important; font-size:18px !important; font-weight:900 !important; padding:5px !important; border:2px solid #000 !important; overflow-wrap:anywhere !important; }
     .edt-sheet.capturing .sh-foot { display:block !important; color:#000 !important; font-size:15px !important; font-weight:700 !important; }
+    .edt-sheet.capturing { width:1100px !important; min-width:1100px !important; max-width:none !important; }
+    .edt-sheet.capturing table.grid th, .edt-sheet.capturing table.grid td, .edt-sheet.capturing .cell, .edt-sheet.capturing .cell * { font-size:20px !important; font-weight:900 !important; }
   `;
   clone.appendChild(exportStyle);
   const foot=clone.querySelector('.sh-foot'); if(foot) foot.textContent='Smanagerbymambo · Exporté le '+stampNow();
-  clone.style.position='fixed'; clone.style.left='-99999px'; clone.style.top='0'; clone.style.width='1600px'; clone.style.minWidth='1600px'; clone.style.maxWidth='none'; clone.style.boxSizing='border-box';
+  clone.style.position='fixed'; clone.style.left='-99999px'; clone.style.top='0'; clone.style.width='1100px'; clone.style.minWidth='1100px'; clone.style.maxWidth='none'; clone.style.boxSizing='border-box';
   clone.querySelectorAll('.gridwrap').forEach(w=>{ w.style.overflow='visible'; w.style.width='100%'; w.style.maxWidth='none'; });
   clone.querySelectorAll('table.grid').forEach(t=>{ t.style.width='100%'; t.style.minWidth='0'; t.style.tableLayout='fixed'; });
   document.body.appendChild(clone);
@@ -2655,7 +2657,7 @@ function exportPdf(el, filename){
     // Format paysage : toute la largeur est conservée, la hauteur se répartit sur plusieurs pages si nécessaire.
     const pdf=new jsPDF({orientation:'landscape', unit:'pt', format:'a4'});
     const pageW=pdf.internal.pageSize.getWidth(), pageH=pdf.internal.pageSize.getHeight();
-    const margin=18, usableW=pageW-margin*2, usableH=pageH-margin*2;
+    const margin=4, usableW=pageW-margin*2, usableH=pageH-margin*2;
     const ratio=usableW/canvas.width;
     const pagePixelHeight=Math.max(1,Math.floor(usableH/ratio));
     for(let y=0, page=0; y<canvas.height; y+=pagePixelHeight, page++){
