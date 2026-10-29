@@ -74,7 +74,7 @@ table.grid{width:auto;border-collapse:collapse;}
 .edt-sheet, .edt-sheet *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 #printArea{display:none;}
 @media print{
-  @page{size:A4 landscape;margin:6mm;}
+  @page{size:A4 landscape;margin:3mm;}
   body.printing > *:not(#printArea){display:none !important;}
   body.printing #printArea{display:block !important;}
   body.printing{background:#fff !important;padding:0 !important;}
@@ -82,8 +82,8 @@ table.grid{width:auto;border-collapse:collapse;}
   #printArea .gridwrap{overflow:visible !important;width:100% !important;max-width:100% !important;}
   #printArea table.grid{width:100% !important;table-layout:fixed !important;}
   #printArea table.grid th,#printArea table.grid td{overflow-wrap:anywhere;word-break:normal;}
-  #printArea .edt-sheet .cell{box-sizing:border-box;height:auto;min-height:32px;min-width:0 !important;padding:2px;font-size:8pt;line-height:1.15;}
-  #printArea .edt-sheet table.recap{font-size:8pt;table-layout:fixed;}
+  #printArea .edt-sheet .cell{box-sizing:border-box;height:auto;min-height:32px;min-width:0 !important;padding:2px;font-size:12px !important;line-height:1.2;}
+  #printArea .edt-sheet table.recap{font-size:12px !important;table-layout:fixed;}
   #printArea .edt-sheet table.recap th,#printArea .edt-sheet table.recap td{overflow-wrap:anywhere;padding:3px;}
   #printArea .edt-sheet tr{page-break-inside:avoid;}
   #printArea .edt-sheet .sh-foot{display:block;}
@@ -131,13 +131,13 @@ table.grid td.slot{background:var(--bg);padding:6px;font-weight:600;white-space:
 
 /* Mise en page fiable des emplois du temps à l'impression */
 @media print {
-  @page { size: A3 landscape; margin: 5mm; }
+  @page { size: A4 landscape; margin: 3mm; }
   html, body { width:100% !important; height:auto !important; margin:0 !important; padding:0 !important; background:#fff !important; }
   body.printing > *:not(#printArea) { display:none !important; }
   body.printing #printArea { display:block !important; width:100% !important; margin:0 !important; padding:0 !important; }
   #printArea .edt-sheet {
     width:100% !important; max-width:none !important; min-width:0 !important;
-    box-sizing:border-box !important; margin:0 !important; padding:2mm !important;
+    box-sizing:border-box !important; margin:0 !important; padding:1mm !important; min-height:204mm !important;
     border:0 !important; border-radius:0 !important; box-shadow:none !important;
     background-color:#fff !important; color:#111 !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;
     overflow:visible !important;
@@ -145,17 +145,51 @@ table.grid td.slot{background:var(--bg);padding:6px;font-weight:600;white-space:
   #printArea .gridwrap { width:100% !important; max-width:none !important; overflow:visible !important; }
   #printArea table.grid { width:100% !important; min-width:0 !important; max-width:none !important; table-layout:fixed !important; }
   #printArea table.grid th, #printArea table.grid td {
-    min-width:0 !important; max-width:none !important; padding:1.5px !important;
-    font-size:8.5pt !important; line-height:1.18 !important;
+    min-width:0 !important; max-width:none !important; padding:2px !important;
+    font-size:12px !important; line-height:1.2 !important;
     overflow-wrap:anywhere !important; word-break:break-word !important;
   }
   #printArea table.grid td.slot, #printArea table.grid th { white-space:normal !important; }
-  #printArea .edt-sheet .cell { min-width:0 !important; height:auto !important; min-height:29px !important; padding:2px !important; font-size:8.2pt !important; line-height:1.18 !important; }
-  #printArea .edt-sheet .cell b { font-size:9pt !important; }
-  #printArea .edt-sheet table.recap { width:100% !important; table-layout:fixed !important; font-size:9pt !important; }
-  #printArea .edt-sheet table.recap th, #printArea .edt-sheet table.recap td { padding:3px !important; font-size:9pt !important; overflow-wrap:anywhere !important; }
+  #printArea .edt-sheet .cell { min-width:0 !important; height:auto !important; min-height:29px !important; padding:2px !important; font-size:12px !important; line-height:1.2 !important; }
+  #printArea .edt-sheet .cell b { font-size:14px !important; font-weight:700 !important; }
+  #printArea .edt-sheet table.recap { width:100% !important; table-layout:fixed !important; font-size:12px !important; }
+  #printArea .edt-sheet table.recap th, #printArea .edt-sheet table.recap td { padding:3px !important; font-size:12px !important; overflow-wrap:anywhere !important; }
   #printArea .edt-sheet tr { break-inside:avoid !important; page-break-inside:avoid !important; }
   #printArea .edt-sheet .sh-foot { display:block !important; }
+}
+
+
+/* Lisibilite renforcée : contraste noir pur et typographie grasse pour les emplois du temps */
+@media print {
+  @page { size: A4 landscape; margin: 3mm; }
+  #printArea .edt-sheet, #printArea .edt-sheet * {
+    color: #000 !important;
+    text-shadow: none !important;
+    opacity: 1 !important;
+  }
+  #printArea .edt-sheet table.grid th,
+  #printArea .edt-sheet table.grid td,
+  #printArea .edt-sheet table.grid td.slot,
+  #printArea .edt-sheet .cell,
+  #printArea .edt-sheet .cell *,
+  #printArea .edt-sheet table.recap th,
+  #printArea .edt-sheet table.recap td {
+    color: #000 !important;
+    font-weight: 800 !important;
+    -webkit-text-fill-color: #000 !important;
+  }
+  #printArea .edt-sheet .cell { font-size: 14px !important; line-height: 1.15 !important; }
+  #printArea .edt-sheet .cell b,
+  #printArea .edt-sheet .cell strong { font-size: 14px !important; font-weight: 900 !important; }
+  #printArea .edt-sheet table.grid th,
+  #printArea .edt-sheet table.grid td,
+  #printArea .edt-sheet table.recap th,
+  #printArea .edt-sheet table.recap td { font-size: 12px !important; line-height: 1.15 !important; }
+  #printArea .edt-sheet table.grid { border-collapse: collapse !important; }
+  #printArea .edt-sheet table.grid th,
+  #printArea .edt-sheet table.grid td,
+  #printArea .edt-sheet table.recap th,
+  #printArea .edt-sheet table.recap td { border-color: #000 !important; }
 }
 
 </style>
