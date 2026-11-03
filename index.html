@@ -1320,10 +1320,19 @@ try {
 // d'effacer une saisie qui n'a pas encore fini d'être envoyée.
 let fbLocalRevision=0;
 let fbSavedRevision=0;
+const FB_PENDING_KEY='edt_v1_pending_sync';
+function hasPendingLocalSync(){ try{return localStorage.getItem(FB_PENDING_KEY)==='1';}catch(e){return false;} }
+function markPendingLocalSync(){ try{localStorage.setItem(FB_PENDING_KEY,'1');}catch(e){} }
+function clearPendingLocalSync(){ try{localStorage.removeItem(FB_PENDING_KEY);}catch(e){} }
 function save(){
   if(readOnly) return;
   fbLocalRevision++;
-  try{ localStorage.setItem('edt_v1', JSON.stringify(state)); localStorage.setItem('edt_v1_ts', String(Date.now())); }catch(e){}
+  markPendingLocalSync();
+  try{
+    const ts=Date.now();
+    localStorage.setItem('edt_v1', JSON.stringify(state));
+    localStorage.setItem('edt_v1_ts', String(ts));
+  }catch(e){ console.warn('Sauvegarde locale impossible',e); setSyncStatus('erreur'); }
   scheduleCloudSave();
 }
 let fbSaveTimer=null;
@@ -1341,7 +1350,7 @@ function scheduleCloudSave(){
       fbSavedRevision=Math.max(fbSavedRevision,revisionAEnvoyer);
       // Si une autre saisie a eu lieu pendant l'envoi, elle doit être envoyée aussi.
       if(fbLocalRevision>revisionAEnvoyer) scheduleCloudSave();
-      else setSyncStatus('ok');
+      else { clearPendingLocalSync(); setSyncStatus('ok'); }
     }).catch(e=>{ console.warn('Sauvegarde en ligne échouée', e); setSyncStatus('erreur'); });
   }, 900);
 }
@@ -3650,8 +3659,17 @@ function startApp(){
     function applyRemote(parsed){
       // Ne jamais remplacer l'état local par un snapshot reçu alors qu'une
       // modification locale reste en attente de sauvegarde Firebase.
-      if(!readOnly && fbLocalRevision>fbSavedRevision){
+      let localTsProtect=0; try{localTsProtect=Number(localStorage.getItem('edt_v1_ts')||0);}catch(e){}
+      // Le drapeau pending et l'horodatage protègent aussi les modifications
+      // enregistrées avant le lancement du listener ou après un rechargement.
+      if(!readOnly && (hasPendingLocalSync() || fbLocalRevision>fbSavedRevision)){
         console.info('Snapshot Firebase ignoré : des modifications locales sont en attente.');
+        return false;
+      }
+      // Un snapshot distant plus ancien ne doit jamais remplacer le cache local.
+      const remoteMaj=(parsed && parsed.__localTs)||0;
+      if(!readOnly && localTsProtect>remoteMaj){
+        console.info('Snapshot Firebase ignoré : cache local plus récent.');
         return false;
       }
       fbApplyingRemote=true;
@@ -3686,12 +3704,15 @@ function startApp(){
       }
       const remote=doc.data();
       const remoteTs=(remote && remote.maj && remote.maj.toMillis) ? remote.maj.toMillis() : 0;
-      if((readOnly || remoteTs>localTs) && remote && remote.data){
+      const localPending=hasPendingLocalSync();
+      if((readOnly || (!localPending && remoteTs>localTs)) && remote && remote.data){
         let parsed=null; try{ parsed=JSON.parse(remote.data); }catch(e){}
         if(parsed) applyRemote(parsed);
         setSyncStatus('ok');
       } else if(!readOnly){
-        pousser();
+        // Les données locales non synchronisées sont prioritaires, même après rechargement.
+        if(localPending){ fbLocalRevision=Math.max(fbLocalRevision,1); scheduleCloudSave(); }
+        else pousser();
       }
       attachLiveListener();
     }).catch(err=>{
