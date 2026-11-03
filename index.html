@@ -1316,16 +1316,33 @@ try {
   if(dispoModifiee && typeof readOnly!=='undefined' && !readOnly) localStorage.setItem('edt_v1',JSON.stringify(state));
 } catch(e){ console.warn('Migration des disponibilités par défaut impossible',e); }
 
-function save(){ if(readOnly) return; try{ localStorage.setItem('edt_v1', JSON.stringify(state)); localStorage.setItem('edt_v1_ts', String(Date.now())); }catch(e){} scheduleCloudSave(); }
+// Suivi des modifications locales pour empêcher un snapshot Firebase ancien
+// d'effacer une saisie qui n'a pas encore fini d'être envoyée.
+let fbLocalRevision=0;
+let fbSavedRevision=0;
+function save(){
+  if(readOnly) return;
+  fbLocalRevision++;
+  try{ localStorage.setItem('edt_v1', JSON.stringify(state)); localStorage.setItem('edt_v1_ts', String(Date.now())); }catch(e){}
+  scheduleCloudSave();
+}
 let fbSaveTimer=null;
 function scheduleCloudSave(){
   if(!fbReady || fbApplyingRemote || readOnly) return;
   clearTimeout(fbSaveTimer);
   fbSaveTimer=setTimeout(()=>{
+    const revisionAEnvoyer=fbLocalRevision;
+    const donneesAEnvoyer=JSON.stringify(state);
+    setSyncStatus('cours');
     fbDb.collection('edt').doc('etat').set({
-      data: JSON.stringify(state),
+      data: donneesAEnvoyer,
       maj: firebase.firestore.FieldValue.serverTimestamp()
-    }).then(()=>{ setSyncStatus('ok'); }).catch(e=>{ console.warn('Sauvegarde en ligne échouée', e); setSyncStatus('erreur'); });
+    }).then(()=>{
+      fbSavedRevision=Math.max(fbSavedRevision,revisionAEnvoyer);
+      // Si une autre saisie a eu lieu pendant l'envoi, elle doit être envoyée aussi.
+      if(fbLocalRevision>revisionAEnvoyer) scheduleCloudSave();
+      else setSyncStatus('ok');
+    }).catch(e=>{ console.warn('Sauvegarde en ligne échouée', e); setSyncStatus('erreur'); });
   }, 900);
 }
 function setSyncStatus(s){
@@ -3631,13 +3648,21 @@ function startApp(){
     setSyncStatus('cours');
     const docRef = fbDb.collection('edt').doc('etat');
     function applyRemote(parsed){
+      // Ne jamais remplacer l'état local par un snapshot reçu alors qu'une
+      // modification locale reste en attente de sauvegarde Firebase.
+      if(!readOnly && fbLocalRevision>fbSavedRevision){
+        console.info('Snapshot Firebase ignoré : des modifications locales sont en attente.');
+        return false;
+      }
       fbApplyingRemote=true;
-      state=parsed;
-      const profsImportesModifies=fusionnerProfesseursDepuisListe();
-      try{ localStorage.setItem('edt_v1', JSON.stringify(state)); localStorage.setItem('edt_v1_ts', String(Date.now())); }catch(e){}
-      renderTabs(); renderAnneeBar(); renderMain();
-      fbApplyingRemote=false;
-      if(profsImportesModifies && !readOnly) pousser();
+      try{
+        state=parsed;
+        const profsImportesModifies=fusionnerProfesseursDepuisListe();
+        try{ localStorage.setItem('edt_v1', JSON.stringify(state)); localStorage.setItem('edt_v1_ts', String(Date.now())); }catch(e){}
+        renderTabs(); renderAnneeBar(); renderMain();
+        if(profsImportesModifies && !readOnly) pousser();
+      } finally { fbApplyingRemote=false; }
+      return true;
     }
     function attachLiveListener(){
       unsubSnap=docRef.onSnapshot(doc=>{
@@ -3646,8 +3671,7 @@ function startApp(){
         if(!remote || !remote.data) return;
         let parsed;
         try{ parsed=JSON.parse(remote.data); }catch(e){ return; }
-        applyRemote(parsed);
-        setSyncStatus('ok');
+        if(applyRemote(parsed)) setSyncStatus('ok');
       }, err=>{ console.warn('Synchronisation en ligne indisponible', err); setSyncStatus('erreur'); });
     }
     const pousser=()=>docRef.set({data:JSON.stringify(state), maj:firebase.firestore.FieldValue.serverTimestamp()})
